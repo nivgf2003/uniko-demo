@@ -163,6 +163,18 @@
     transition:background .2s ease;
   }
   .hero-search button:hover{ background:var(--action-deep); }
+  #heroMicBtn{
+    background:transparent;
+    color:var(--ink-soft);
+    padding:0 12px;
+    flex-shrink:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  #heroMicBtn:hover{ background:var(--gold-soft); color:var(--action); }
+  #heroMicBtn.listening{ color:var(--action); animation:mic-pulse 1s ease-in-out infinite; }
+  @keyframes mic-pulse{ 0%,100%{ opacity:1; } 50%{ opacity:.4; } }
   @media (max-width:520px){
     .hero{ padding:44px 18px 38px; }
     .hero-search{ flex-direction:column; border-radius:14px; }
@@ -888,6 +900,106 @@
     gap:12px;
     margin-top:8px;
   }
+  /* Panel de analíticas del banco — deliberadamente marcado como DEMO en varios lugares: los
+     números son ilustrativos (ver stableFakeNumber), la idea es mostrarle a un banco real qué
+     vería si sus datos estuvieran conectados, no hacerle creer que ya lo están. */
+  .analytics-demo-banner{
+    background:var(--ocean-deep);
+    color:var(--ink-inverse);
+    border-radius:10px;
+    padding:12px 16px;
+    font-size:.8rem;
+    line-height:1.5;
+    margin-bottom:16px;
+  }
+  .analytics-demo-tag{
+    background:var(--action);
+    color:#fff;
+    font-size:.65rem;
+    font-weight:800;
+    letter-spacing:.06em;
+    padding:2px 8px;
+    border-radius:999px;
+    margin-right:8px;
+  }
+  .analytics-demo-tag-sm{
+    background:var(--gold-soft);
+    color:var(--action);
+    font-size:.62rem;
+    font-weight:800;
+    letter-spacing:.04em;
+    text-transform:uppercase;
+    padding:1px 7px;
+    border-radius:999px;
+    margin-left:6px;
+    vertical-align:middle;
+  }
+  .analytics-kpis{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));
+    gap:10px;
+    margin-bottom:16px;
+  }
+  .analytics-kpi{
+    background:var(--white);
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:14px 16px;
+  }
+  .analytics-kpi-value{
+    font-family:var(--font-serif);
+    font-size:1.8rem;
+    font-weight:700;
+    color:var(--ocean);
+  }
+  .analytics-kpi-label{
+    font-size:.72rem;
+    color:var(--ink-soft);
+    margin-top:2px;
+  }
+  .analytics-market{
+    background:var(--gold-soft);
+    border-radius:12px;
+    padding:14px 16px;
+    margin-bottom:16px;
+  }
+  .analytics-market-title{
+    font-weight:800;
+    font-size:.88rem;
+    color:var(--ink);
+    margin-bottom:4px;
+  }
+  .analytics-market-detail{
+    font-size:.82rem;
+    color:var(--ink-soft);
+    line-height:1.5;
+  }
+  .analytics-top{
+    background:var(--white);
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:14px 16px;
+    margin-bottom:16px;
+  }
+  .analytics-top-title{
+    font-weight:800;
+    font-size:.88rem;
+    color:var(--ink);
+    margin-bottom:10px;
+  }
+  .analytics-empty-note{ font-size:.8rem; color:var(--ink-soft); font-style:italic; }
+  .analytics-top-row{
+    display:grid;
+    grid-template-columns:1fr 2fr auto;
+    align-items:center;
+    gap:10px;
+    padding:6px 0;
+    font-size:.78rem;
+  }
+  .analytics-top-name{ color:var(--ink); font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .analytics-top-bar-wrap{ background:var(--line); border-radius:999px; height:8px; overflow:hidden; }
+  .analytics-top-bar{ background:var(--action); height:100%; border-radius:999px; }
+  .analytics-top-nums{ color:var(--ink-soft); white-space:nowrap; }
   .banco-item{
     background:var(--sand-card);
     border:1px solid var(--line);
@@ -1847,9 +1959,12 @@
 <section class="hero">
   <div class="hero-inner">
     <h2 class="hero-title">Describí la propiedad que buscás, en tus palabras</h2>
-    <p class="hero-sub">Bienes reposeídos por bancos en Panamá. Escribí lo que te interesa — tipo, zona, vista, cuartos, piscina — o dibujá el área directamente en el mapa.</p>
+    <p class="hero-sub">Bienes reposeídos por bancos en Panamá. Escribí o hablá lo que te interesa — tipo, zona, vista, cuartos, piscina — o dibujá el área directamente en el mapa.</p>
     <div class="hero-search">
       <input type="text" id="heroSearchInput" placeholder="Ej. Casa moderna con piscina y vista al mar, 3 habitaciones, cerca de Coronado...">
+      <button type="button" id="heroMicBtn" title="Buscar por voz" aria-label="Buscar por voz">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z"/><path d="M19 11a7 7 0 0 1-14 0"/><line x1="12" y1="18" x2="12" y2="22"/></svg>
+      </button>
       <button type="button" id="heroSearchBtn">Buscar</button>
     </div>
   </div>
@@ -2099,6 +2214,7 @@
 <main class="main-content" style="padding:16px;">
   <div class="map-section-title">Panel del banco</div>
   <div class="map-section-sub" id="bancoWelcome" style="margin-bottom:14px;"></div>
+  <div id="bancoAnalytics"></div>
   <button type="button" class="auth-btn" id="bancoAddBtn" style="margin-bottom:14px;">+ Agregar propiedad</button>
   <div id="bancoAddForm" class="banco-form" style="display:none;">
     <div class="banco-form-grid">
@@ -3109,10 +3225,52 @@ function getBancoInventory(){
 function saveBancoInventory(list){
   localStorage.setItem(bancoStorageKey(), JSON.stringify(list));
 }
+// Hash chico y estable para sacar un número "aleatorio" que no salte en cada render — con
+// datos reales esto sería vistas/contactos de verdad, guardados en el servidor.
+function stableFakeNumber(seed, min, max){
+  let h = 0;
+  for(let i=0; i<seed.length; i++){ h = (h*31 + seed.charCodeAt(i)) | 0; }
+  const frac = (Math.abs(h) % 1000) / 1000;
+  return Math.round(min + frac*(max-min));
+}
+function renderBancoAnalytics(inv){
+  const box = document.getElementById('bancoAnalytics');
+  const topList = inv.map(p => ({
+    nombre: p.nombre,
+    vistas: stableFakeNumber(p.nombre + 'v', 8, 140),
+    contactos: stableFakeNumber(p.nombre + 'c', 0, 12),
+  })).sort((a,b) => b.vistas - a.vistas).slice(0, 4);
+  const maxVistas = Math.max(1, ...topList.map(t => t.vistas));
+  const topHtml = inv.length === 0
+    ? '<div class="analytics-empty-note">Agregá propiedades para ver acá cuáles generan más interés.</div>'
+    : topList.map(t =>
+        '<div class="analytics-top-row">' +
+          '<div class="analytics-top-name">' + t.nombre + '</div>' +
+          '<div class="analytics-top-bar-wrap"><div class="analytics-top-bar" style="width:' + Math.round(t.vistas/maxVistas*100) + '%"></div></div>' +
+          '<div class="analytics-top-nums">' + t.vistas + ' vistas · ' + t.contactos + ' contactos</div>' +
+        '</div>'
+      ).join('');
+  box.innerHTML =
+    '<div class="analytics-demo-banner"><span class="analytics-demo-tag">DEMO</span> Números de ejemplo para mostrar el concepto — con datos reales del banco esto se calcula solo, en tiempo real.</div>' +
+    '<div class="analytics-kpis">' +
+      '<div class="analytics-kpi"><div class="analytics-kpi-value">63</div><div class="analytics-kpi-label">Días promedio en mercado</div></div>' +
+      '<div class="analytics-kpi"><div class="analytics-kpi-value">34%</div><div class="analytics-kpi-label">Vendido en los últimos 90 días</div></div>' +
+      '<div class="analytics-kpi"><div class="analytics-kpi-value">94%</div><div class="analytics-kpi-label">Precio de venta vs. precio de lista</div></div>' +
+    '</div>' +
+    '<div class="analytics-market">' +
+      '<div class="analytics-market-title">Tu cartera vs. el mercado <span class="analytics-demo-tag-sm">demo</span></div>' +
+      '<div class="analytics-market-detail">Tus propiedades están en promedio <b>8% por debajo</b> del precio de mercado de su zona — una posición competitiva para vender más rápido que el resto.</div>' +
+    '</div>' +
+    '<div class="analytics-top">' +
+      '<div class="analytics-top-title">Propiedades con más interés esta semana <span class="analytics-demo-tag-sm">demo</span></div>' +
+      topHtml +
+    '</div>';
+}
 function renderBancoPanel(){
   document.getElementById('bancoWelcome').textContent = 'Bienvenido, ' + currentUser.name + '. Aquí carga tu banco el inventario que verán los compradores.';
   renderProviderDirectory('bancoDirectory', null, 'banco');
   const inv = getBancoInventory();
+  renderBancoAnalytics(inv);
   const listEl = document.getElementById('bancoInventoryList');
   if(inv.length === 0){
     listEl.innerHTML = '<div class="empty">Aún no has agregado ninguna propiedad. Toca "+ Agregar propiedad" para cargar la primera.</div>';
@@ -3812,6 +3970,45 @@ document.getElementById('heroSearchBtn').addEventListener('click', () => {
 document.getElementById('heroSearchInput').addEventListener('keydown', (e) => {
   if(e.key === 'Enter') document.getElementById('heroSearchBtn').click();
 });
+
+// Búsqueda por voz — Web Speech API, nativa del navegador, sin backend ni costo. Funciona bien
+// en Chrome/Edge (desktop y Android); Safari tiene soporte parcial y Firefox no la soporta, así
+// que el botón se esconde solo si el navegador no la ofrece en vez de mostrar un botón roto.
+const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+const heroMicBtn = document.getElementById('heroMicBtn');
+if(SpeechRecognitionAPI){
+  const recognition = new SpeechRecognitionAPI();
+  recognition.lang = 'es-PA';
+  recognition.continuous = false;
+  recognition.interimResults = false;
+  let listening = false;
+  heroMicBtn.addEventListener('click', () => {
+    if(listening) { recognition.stop(); return; }
+    try{ recognition.start(); } catch(e){ /* ya estaba escuchando */ }
+  });
+  recognition.addEventListener('start', () => {
+    listening = true;
+    heroMicBtn.classList.add('listening');
+    document.getElementById('heroSearchInput').placeholder = 'Escuchando… decí qué buscás';
+  });
+  recognition.addEventListener('end', () => {
+    listening = false;
+    heroMicBtn.classList.remove('listening');
+    document.getElementById('heroSearchInput').placeholder = 'Ej. Casa moderna con piscina y vista al mar, 3 habitaciones, cerca de Coronado...';
+  });
+  recognition.addEventListener('result', (e) => {
+    const transcript = e.results[0][0].transcript;
+    document.getElementById('heroSearchInput').value = transcript;
+    document.getElementById('heroSearchBtn').click();
+  });
+  recognition.addEventListener('error', () => {
+    listening = false;
+    heroMicBtn.classList.remove('listening');
+  });
+} else {
+  heroMicBtn.style.display = 'none';
+}
+
 renderList();
 
 // ---- Calculadora de poder adquisitivo ----
