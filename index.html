@@ -1515,41 +1515,65 @@
     background:var(--sand);
     padding:18px 16px 14px;
   }
-  /* El mapa se queda fijo mientras el listado de abajo scrollea al lado — pedido explícito de
-     Pablo tras ver Green-Acres: "elijo una zona y quiero bajar a ver los departamentos sin
-     perder el mapa de vista". Solo en pantallas anchas — en el celular no hay espacio para
-     dos columnas, así que ahí se apila normal (mapa arriba, lista abajo, un solo scroll). */
+  /* Tres columnas que scrollean cada una por su cuenta — pedido explícito de Pablo tras ver
+     Green-Acres: con el mouse arriba del mapa, la rueda no debe mover la página entera, solo
+     esa columna (y el mapa, al no tener más contenido que su propia altura, simplemente no se
+     mueve). Antes esto se resolvía con `position:sticky` sobre una página con un solo scroll —
+     se veía bien pero técnicamente seguía siendo un solo scroll compartido, por eso mover el
+     mouse a la izquierda igual scrolleaba todo. La solución real es que cada columna tenga su
+     propio alto fijo (100% del espacio debajo del header) y su propio overflow-y:auto. Solo en
+     pantallas anchas — en el celular no hay espacio para columnas independientes, así que ahí
+     se apila normal (mapa arriba, lista abajo, un solo scroll de página). */
   @media (min-width: 861px){
+    #buyerView .app-layout{
+      height:calc(100vh - var(--header-h, 64px));
+      align-items:stretch;
+    }
+    #buyerView .sidebar-filters{ height:100%; overflow-y:auto; }
+    #buyerView .main-content{
+      height:100%;
+      display:flex;
+      flex-direction:column;
+      min-height:0;
+    }
+    #buyerView #mapaTabPane,
+    #buyerView #proveedoresTabPane{ flex:1 1 auto; min-height:0; }
+    #buyerView #proveedoresTabPane{ overflow-y:auto; }
     .mapa-tab-pane{
       display:flex;
-      align-items:flex-start;
+      align-items:stretch;
       gap:8px;
+      height:100%;
     }
     /* Mapa a la derecha, listado al medio — como Green-Acres. El orden visual se invierte con
        flex `order`; el HTML no cambia. El mapa se queda grande de verdad: llena el alto
        disponible en vez de limitarse por aspect-ratio, que era lo que lo hacía verse chico. */
     .mapa-tab-pane .map-section{
       order:2;
-      position:sticky;
-      top:calc(var(--header-h, 64px) + 12px);
       flex:0 0 58%;
       max-width:58%;
-      max-height:calc(100vh - var(--header-h, 64px) - 24px);
+      height:100%;
       display:flex;
       flex-direction:column;
-      overflow:hidden;
+      overflow-y:auto;
     }
     .mapa-tab-pane .map-section .map-section-sub{ flex-shrink:0; }
     .mapa-tab-pane #mapContainer{
       aspect-ratio:auto;
       max-height:none;
       flex:1 1 auto;
-      min-height:380px;
+      min-height:280px;
     }
     .mapa-tab-pane .map-controls,
     .mapa-tab-pane .map-layers,
     .mapa-tab-pane .map-section > .map-section-sub:last-child{ flex-shrink:0; }
-    .mapa-tab-pane .results-col{ order:1; flex:1 1 42%; min-width:0; }
+    .mapa-tab-pane .results-col{
+      order:1;
+      flex:1 1 42%;
+      min-width:0;
+      height:100%;
+      overflow-y:auto;
+    }
   }
   .map-section-title{
     font-family:var(--font-serif);
