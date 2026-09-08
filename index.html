@@ -3331,8 +3331,15 @@ function renderBancoPanel(){
     return;
   }
   const estadoOptions = ['Disponible','Reservado','Vendido','Retirado'];
-  listEl.innerHTML = inv.map((p, i) =>
-    '<div class="banco-item">' +
+  listEl.innerHTML = inv.map((p, i) => {
+    // Mismo número falso que ya se ve arriba en "Propiedades con más interés" (misma fórmula,
+    // misma semilla) — si en el demo aparece con pocas vistas, se lo marcamos acá también, en
+    // el lugar donde el banco realmente puede actuar (bajar precio, pedir certificación).
+    const vistasDemo = stableFakeNumber(p.nombre + 'v', 8, 140);
+    const bajoInteresTag = (p.estado || 'Disponible') === 'Disponible' && vistasDemo < 20
+      ? '<span class="tag tag-ocupada" title="Demo: menos vistas que el resto de tu cartera">Bajo interés — considerá ajustar el precio</span>'
+      : '';
+    return '<div class="banco-item">' +
       '<div class="banco-item-top">' +
         (p.fotos && p.fotos[0]
           ? '<img class="banco-item-thumb" src="' + p.fotos[0] + '">'
@@ -3343,16 +3350,17 @@ function renderBancoPanel(){
             (p.area ? ' · ' + area(p.area) : '') +
             (p.hab ? ' · ' + p.hab + ' hab' : '') +
             (p.banos ? ' · ' + p.banos + ' baños' : '') +
-            (p.fotos && p.fotos.length ? ' · 📷 ' + p.fotos.length : '') + '</div>' +
+            (p.fotos && p.fotos.length ? ' · ' + p.fotos.length + ' fotos' : '') + '</div>' +
           '<select class="banco-item-estado-select st-' + (p.estado || 'Disponible').toLowerCase() + '" data-idx="' + i + '">' +
             estadoOptions.map(e => '<option value="' + e + '"' + (e === (p.estado || 'Disponible') ? ' selected' : '') + '>' + e + '</option>').join('') +
           '</select>' +
+          bajoInteresTag +
         '</div>' +
         '<div class="banco-item-price">' + money(p.precio) + '</div>' +
         '<button type="button" class="banco-item-del" data-idx="' + i + '" title="Eliminar propiedad">✕</button>' +
       '</div>' +
-    '</div>'
-  ).join('');
+    '</div>';
+  }).join('');
   listEl.querySelectorAll('.banco-item-del').forEach(btn => {
     btn.addEventListener('click', () => {
       const inv2 = getBancoInventory();
