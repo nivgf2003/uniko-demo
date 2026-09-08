@@ -2242,7 +2242,7 @@
       <div class="sim-row"><label>Zona</label><input type="text" id="bancoFormZona" placeholder="Ej. San Carlos, Panamá Oeste"></div>
       <div class="sim-row"><label>Tipo</label>
         <select id="bancoFormTipo">
-          <option>Casa</option><option>Apartamento</option><option>Terreno</option>
+          <option>Casa</option><option>Apartamento</option><option>Terreno</option><option>Comercial</option>
         </select>
       </div>
       <div class="sim-row"><label>Precio (USD)</label><input type="number" id="bancoFormPrecio" placeholder="Ej. 125000"></div>
@@ -3331,8 +3331,30 @@ function renderAppView(){
 function bancoStorageKey(){
   return 'uniko_banco_inv_' + (currentUser.email || currentUser.name);
 }
+// Datos de ejemplo para que la demo no arranque vacía — pedido explícito de Niv: "que se pueda
+// mostrar a un banco cómo se ve cuando ya está completo, no una pantalla en blanco". Se siembran
+// solo la primera vez (si el inventario/directorio de esta cuenta está vacío) — una vez que el
+// usuario agrega o borra algo, ya no se vuelve a sembrar encima de lo que hizo.
+const BANCO_INVENTORY_SEED = [
+  { nombre: 'Apto 5C, P.H. Perla Mar', zona: 'San Carlos, Panamá Oeste', tipo: 'Apartamento', estado: 'Disponible', precio: 125000, area: 88, hab: 1, banos: 1, estilo: null, fotos: [], lat: 8.455972, lon: -79.9728849 },
+  { nombre: 'Casa Las Olas, Nivel 800', zona: 'San Carlos, Panamá Oeste', tipo: 'Casa', estado: 'Reservado', precio: 400000, area: 305, hab: 3, banos: 2, estilo: null, fotos: [], lat: 8.457, lon: -79.975 },
+  { nombre: 'PH Vista Golf, Torre B 12A', zona: 'Coronado', tipo: 'Apartamento', estado: 'Disponible', precio: 210000, area: 140, hab: 2, banos: 2, estilo: 'Moderno', fotos: [], lat: 8.5, lon: -79.883 },
+  { nombre: 'Terreno Playa Blanca, Lote 14', zona: 'Río Hato, Antón', tipo: 'Terreno', estado: 'Disponible', precio: 85000, area: 1200, hab: null, banos: null, estilo: null, fotos: [], lat: 8.38, lon: -80.16 },
+  { nombre: 'Casa Pedasí Surf', zona: 'Pedasí, Los Santos', tipo: 'Casa', estado: 'Disponible', precio: 275000, area: 220, hab: 3, banos: 2, estilo: 'Rústico', fotos: [], lat: 7.53, lon: -80.03 },
+  { nombre: 'Villa Bocas Marina', zona: 'Bocas del Toro', tipo: 'Casa', estado: 'Reservado', precio: 520000, area: 310, hab: 4, banos: 3, estilo: null, fotos: [], lat: 9.34, lon: -82.24 },
+  { nombre: 'Local Comercial Arraiján Centro', zona: 'Arraiján', tipo: 'Comercial', estado: 'Disponible', precio: 95000, area: 60, hab: null, banos: null, estilo: null, fotos: [], lat: 8.95, lon: -79.66 },
+  { nombre: 'Finca El Chirú, 5 hectáreas', zona: 'El Chirú, Coclé', tipo: 'Terreno', estado: 'Vendido', precio: 150000, area: 50000, hab: null, banos: null, estilo: null, fotos: [], lat: 8.35, lon: -80.35 },
+];
 function getBancoInventory(){
-  try{ return JSON.parse(localStorage.getItem(bancoStorageKey()) || '[]'); }catch(e){ return []; }
+  try{
+    const list = JSON.parse(localStorage.getItem(bancoStorageKey()) || '[]');
+    if(list.length === 0 && !localStorage.getItem(bancoStorageKey() + '_seeded')){
+      localStorage.setItem(bancoStorageKey() + '_seeded', '1');
+      saveBancoInventory(BANCO_INVENTORY_SEED);
+      return BANCO_INVENTORY_SEED.slice();
+    }
+    return list;
+  }catch(e){ return []; }
 }
 function saveBancoInventory(list){
   localStorage.setItem(bancoStorageKey(), JSON.stringify(list));
@@ -3505,8 +3527,28 @@ document.getElementById('bancoSaveBtn').addEventListener('click', () => {
 // -- Directorio de proveedores compartido (demo: registro guardado en localStorage de este navegador,
 // no hay backend real todavía — solo ve proveedores que se hayan dado de alta en ESTE navegador) --
 const PROVEEDOR_CATS = ['Electricista','Cerrajero','Plomero','Tasador','Remodelación','Limpieza'];
+const PROVIDERS_SEED = [
+  { providerId: 'seed-1', negocio: 'Electricidad Pérez', categorias: ['Electricista'], telefono: '+507 6000-1111', email: 'juan@demo.com' },
+  { providerId: 'seed-2', negocio: 'Cerrajería Rápida PTY', categorias: ['Cerrajero'], telefono: '+507 6000-2222', email: 'cerrajeriapty@demo.com' },
+  { providerId: 'seed-3', negocio: 'Plomería Istmo', categorias: ['Plomero'], telefono: '+507 6000-3333', email: 'plomeriaistmo@demo.com' },
+  { providerId: 'seed-4', negocio: 'Tasaciones del Pacífico', categorias: ['Tasador'], telefono: '+507 6000-4444', email: 'tasacionespacifico@demo.com' },
+  { providerId: 'seed-5', negocio: 'Remodelaciones Coronado', categorias: ['Remodelación'], telefono: '+507 6000-5555', email: 'remodelcoronado@demo.com' },
+  { providerId: 'seed-6', negocio: 'Limpieza Total Panamá', categorias: ['Limpieza'], telefono: '+507 6000-6666', email: 'limpiezatotal@demo.com' },
+  { providerId: 'seed-7', negocio: 'Electricistas 24/7 David', categorias: ['Electricista'], telefono: '+507 6000-7777', email: 'electricistas24@demo.com' },
+  { providerId: 'seed-8', negocio: 'Cerrajería Chiriquí', categorias: ['Cerrajero'], telefono: '+507 6000-8888', email: 'cerrajeriachiriqui@demo.com' },
+  { providerId: 'seed-9', negocio: 'Plomeros Express Azuero', categorias: ['Plomero'], telefono: '+507 6000-9999', email: 'plomerosazuero@demo.com' },
+  { providerId: 'seed-10', negocio: 'Reformas y Acabados PTY', categorias: ['Remodelación'], telefono: '+507 6000-1010', email: 'reformasacabados@demo.com' },
+];
 function getProvidersRegistry(){
-  try{ return JSON.parse(localStorage.getItem('uniko_providers_registry') || '[]'); }catch(e){ return []; }
+  try{
+    const reg = JSON.parse(localStorage.getItem('uniko_providers_registry') || '[]');
+    if(reg.length === 0 && !localStorage.getItem('uniko_providers_seeded')){
+      localStorage.setItem('uniko_providers_seeded', '1');
+      localStorage.setItem('uniko_providers_registry', JSON.stringify(PROVIDERS_SEED));
+      return PROVIDERS_SEED.slice();
+    }
+    return reg;
+  }catch(e){ return []; }
 }
 function upsertProviderRegistry(profile){
   const reg = getProvidersRegistry();
