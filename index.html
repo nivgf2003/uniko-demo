@@ -1000,6 +1000,12 @@
   .analytics-top-bar-wrap{ background:var(--line); border-radius:999px; height:8px; overflow:hidden; }
   .analytics-top-bar{ background:var(--action); height:100%; border-radius:999px; }
   .analytics-top-nums{ color:var(--ink-soft); white-space:nowrap; }
+  .review-row{ padding:10px 0; border-top:1px solid var(--line); }
+  .review-row:first-child{ border-top:none; padding-top:0; }
+  .review-top{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:3px; }
+  .review-name{ font-weight:700; font-size:.82rem; color:var(--ink); }
+  .review-stars{ color:var(--gold); font-size:.85rem; letter-spacing:1px; }
+  .review-text{ font-size:.8rem; color:var(--ink-soft); font-style:italic; line-height:1.5; }
   .banco-item{
     background:var(--sand-card);
     border:1px solid var(--line);
@@ -2151,6 +2157,9 @@
 <div class="filter-label">Vista</div>
 <select class="filter-select" id="vistaToolbar"></select>
 
+<div class="filter-label">Estilo</div>
+<select class="filter-select" id="estiloToolbar"></select>
+
 <div class="filter-label">Amenidades</div>
 <details class="amenity-dropdown" id="amenidadesDropdown">
   <summary>Cualquiera</summary>
@@ -2229,6 +2238,12 @@
       <div class="sim-row"><label>Metraje (m²)</label><input type="number" id="bancoFormArea" placeholder="Ej. 88"></div>
       <div class="sim-row"><label>Habitaciones</label><input type="number" id="bancoFormHab" placeholder="Ej. 3" min="0"></div>
       <div class="sim-row"><label>Baños</label><input type="number" id="bancoFormBanos" placeholder="Ej. 2" min="0"></div>
+      <div class="sim-row"><label>Estilo</label>
+        <select id="bancoFormEstilo">
+          <option value="">No especificado</option>
+          <option>Moderno</option><option>Rústico</option><option>Clásico</option>
+        </select>
+      </div>
       <div class="sim-row"><label>Lat, lon (opcional, para el mapa)</label><input type="text" id="bancoFormLatLon" placeholder="Ej. 8.455972, -79.9728849"></div>
     </div>
     <div class="sim-row"><label>Fotos</label><input type="file" id="bancoFormFotos" accept="image/*" multiple></div>
@@ -2269,6 +2284,7 @@
 </aside>
 <main class="main-content">
   <div style="padding:16px;">
+    <div id="proveedorAnalytics"></div>
     <div class="map-section-title">Mis trabajos</div>
     <div id="proveedorJobs" style="margin-top:10px;"></div>
   </div>
@@ -2491,7 +2507,23 @@ DATA.forEach(d => {
     'Club de playa': blob.includes('beach club') || blob.includes('club de playa'),
     'Restaurante': blob.includes('restaurante'),
     'Gym': blob.includes('gimnasio') || blob.includes('gym'),
+    // Estos 7 se agregaron a la lista de filtros pero les faltaba la detección real — sin esto,
+    // elegirlos en el filtro siempre daba cero resultados porque la clave no existía nunca.
+    'Cancha de pádel': blob.includes('pádel') || blob.includes('padel'),
+    'Cancha de tenis': blob.includes('tenis'),
+    'Cancha de fútbol': blob.includes('fútbol') || blob.includes('futbol') || blob.includes('cancha deportiva'),
+    'Área de niños': blob.includes('juegos infantiles') || blob.includes('área de niños') || blob.includes('area de niños') || blob.includes('parque infantil'),
+    'Seguridad 24/7': blob.includes('seguridad') || blob.includes('vigilancia') || blob.includes('portón eléctrico') || blob.includes('caseta de seguridad') || blob.includes('complejo cercado'),
+    'Ascensor': blob.includes('ascensor') || blob.includes('elevador'),
+    'Estacionamiento': blob.includes('estacionamiento') || blob.includes('parqueo') || blob.includes('garaje') || blob.includes('cochera'),
   };
+  // No tenemos un dato real de "estilo arquitectónico" en el origen (los PDF de bancos no lo
+  // incluyen) — inferimos algo solo cuando las notas del banco lo mencionan explícitamente, y
+  // dejamos null (mostrado como "No especificado") en vez de inventar un valor.
+  if(blob.includes('moderno') || blob.includes('moderna') || blob.includes('contemporán')) d._estilo = 'Moderno';
+  else if(blob.includes('rústic') || blob.includes('rustic') || blob.includes('cabaña') || blob.includes('campestre')) d._estilo = 'Rústico';
+  else if(blob.includes('colonial') || blob.includes('clásic') || blob.includes('clasic') || blob.includes('tradicional')) d._estilo = 'Clásico';
+  else d._estilo = null;
 });
 const zonas = [...new Set(DATA.filter(d => d.categoria_venta==='Reposeído bancario').map(d => d._zona))];
 const zonaDatalistEl = document.getElementById('zonaDatalist');
@@ -2506,6 +2538,7 @@ zonaSuggestions.forEach(s => {
   zonaDatalistEl.appendChild(opt);
 });
 const vistasFijas = ['Campo de Golf','Playa','Mar','Piscina','Lago','Río','Jardín','Montañas'];
+const estilosFijos = ['Moderno','Rústico','Clásico'];
 const estadosAmueblado = ['Amueblado','Línea blanca','Vacío','No especificado'].filter(e => DATA.some(d => d.amueblado===e));
 const amenidadesList = ['Piscina','Campo de golf','Club de playa','Restaurante','Gym','Cancha de pádel','Cancha de tenis','Cancha de fútbol','Área de niños','Seguridad 24/7','Ascensor','Estacionamiento'];
 
@@ -2550,6 +2583,24 @@ function renderVistaChips(){
   vistaToolbar.value = activeVista;
 }
 vistaToolbar.addEventListener('change', () => { activeVista = vistaToolbar.value; renderList(); });
+
+let activeEstilo = 'Todos';
+const estiloToolbar = document.getElementById('estiloToolbar');
+function renderEstiloChips(){
+  estiloToolbar.innerHTML = '';
+  const opt0 = document.createElement('option');
+  opt0.value = 'Todos';
+  opt0.textContent = 'Cualquiera';
+  estiloToolbar.appendChild(opt0);
+  estilosFijos.forEach(v => {
+    const opt = document.createElement('option');
+    opt.value = v;
+    opt.textContent = v;
+    estiloToolbar.appendChild(opt);
+  });
+  estiloToolbar.value = activeEstilo;
+}
+estiloToolbar.addEventListener('change', () => { activeEstilo = estiloToolbar.value; renderList(); });
 
 const amenidadesToolbar = document.getElementById('amenidadesToolbar');
 const amenidadesSummary = document.querySelector('#amenidadesDropdown summary');
@@ -3012,6 +3063,9 @@ function getFiltered(){
   if(activeVista !== 'Todos'){
     arr = arr.filter(d => d._vista === activeVista);
   }
+  if(activeEstilo !== 'Todos'){
+    arr = arr.filter(d => d._estilo === activeEstilo);
+  }
   if(activeAmenidades.length > 0){
     arr = arr.filter(d => activeAmenidades.every(a => d._amenidades[a] === true));
   }
@@ -3350,6 +3404,7 @@ document.getElementById('bancoSaveBtn').addEventListener('click', () => {
   const area = parseFloat(document.getElementById('bancoFormArea').value);
   const hab = parseInt(document.getElementById('bancoFormHab').value, 10);
   const banos = parseInt(document.getElementById('bancoFormBanos').value, 10);
+  const estilo = document.getElementById('bancoFormEstilo').value || null;
   const latlon = document.getElementById('bancoFormLatLon').value.split(',').map(s => parseFloat(s.trim()));
   if(!nombre || !zona || isNaN(precio)){
     alert('Completa al menos nombre, zona y precio.');
@@ -3357,7 +3412,7 @@ document.getElementById('bancoSaveBtn').addEventListener('click', () => {
   }
   const inv = getBancoInventory();
   inv.push({
-    nombre, zona, tipo, estado: 'Disponible', precio,
+    nombre, zona, tipo, estado: 'Disponible', precio, estilo,
     area: !isNaN(area) ? area : null,
     hab: !isNaN(hab) ? hab : null,
     banos: !isNaN(banos) ? banos : null,
@@ -3372,6 +3427,7 @@ document.getElementById('bancoSaveBtn').addEventListener('click', () => {
   document.getElementById('bancoFormArea').value = '';
   document.getElementById('bancoFormHab').value = '';
   document.getElementById('bancoFormBanos').value = '';
+  document.getElementById('bancoFormEstilo').value = '';
   document.getElementById('bancoFormLatLon').value = '';
   document.getElementById('bancoFormFotos').value = '';
   document.getElementById('bancoFormFotosPreview').innerHTML = '';
@@ -3598,6 +3654,45 @@ function renderProveedorProfileView(){
     renderProveedorPanel();
   });
 }
+// Mismo lenguaje visual que el panel de analíticas del banco (misma idea: mostrarle al que se
+// afilia qué vería si esto estuviera conectado a datos reales) pero con contenido propio de un
+// proveedor de servicio — no son las mismas métricas que le importan a un banco. Pedido de Niv:
+// "similar al banco, no lo mismo" + reseñas, que el banco no tiene.
+const FAKE_REVIEWS = [
+  { nombre: 'Global Bank', texto: 'Respondió rápido y el trabajo quedó impecable.', estrellas: 5 },
+  { nombre: 'Scotiabank/Davibank', texto: 'Buen precio, cumplió el horario acordado.', estrellas: 4 },
+  { nombre: 'Unibank', texto: 'Muy profesional, lo volveríamos a contratar.', estrellas: 5 },
+];
+function renderProveedorAnalytics(){
+  const box = document.getElementById('proveedorAnalytics');
+  const cat = (currentUser.categorias && currentUser.categorias[0]) || 'proveedores de servicio';
+  const seed = currentUser.providerId || currentUser.name || 'demo';
+  const solicitudes = stableFakeNumber(seed + 's', 4, 22);
+  const completados = stableFakeNumber(seed + 'c', 2, solicitudes);
+  const horasResp = (stableFakeNumber(seed + 'h', 8, 48) / 10).toFixed(1);
+  const percentil = stableFakeNumber(seed + 'p', 55, 92);
+  const starsHtml = (n) => '<span class="review-stars">' + '★'.repeat(n) + '☆'.repeat(5-n) + '</span>';
+  box.innerHTML =
+    '<div class="analytics-demo-banner"><span class="analytics-demo-tag">DEMO</span> Números de ejemplo para mostrar el concepto — con actividad real en la plataforma, esto se calcula solo.</div>' +
+    '<div class="analytics-kpis">' +
+      '<div class="analytics-kpi"><div class="analytics-kpi-value">' + solicitudes + '</div><div class="analytics-kpi-label">Solicitudes este mes</div></div>' +
+      '<div class="analytics-kpi"><div class="analytics-kpi-value">' + horasResp + ' hs</div><div class="analytics-kpi-label">Tiempo de respuesta promedio</div></div>' +
+      '<div class="analytics-kpi"><div class="analytics-kpi-value">' + completados + '</div><div class="analytics-kpi-label">Trabajos completados</div></div>' +
+    '</div>' +
+    '<div class="analytics-market">' +
+      '<div class="analytics-market-title">Tu desempeño vs. otros ' + cat.toLowerCase() + 's <span class="analytics-demo-tag-sm">demo</span></div>' +
+      '<div class="analytics-market-detail">Respondés más rápido que el <b>' + percentil + '%</b> de los ' + cat.toLowerCase() + 's en tu zona — eso te ubica más arriba cuando un banco elige a quién enviarle una solicitud.</div>' +
+    '</div>' +
+    '<div class="analytics-top">' +
+      '<div class="analytics-top-title">Reseñas recientes <span class="analytics-demo-tag-sm">demo</span></div>' +
+      FAKE_REVIEWS.map(r =>
+        '<div class="review-row">' +
+          '<div class="review-top"><span class="review-name">' + r.nombre + '</span>' + starsHtml(r.estrellas) + '</div>' +
+          '<div class="review-text">"' + r.texto + '"</div>' +
+        '</div>'
+      ).join('') +
+    '</div>';
+}
 function renderProveedorPanel(){
   if(proveedorEditing === null) proveedorEditing = !currentUser.negocio; // primera vez sin perfil -> editar
   workingCategorias = (currentUser.categorias || []).slice();
@@ -3610,6 +3705,7 @@ function renderProveedorPanel(){
   document.getElementById('proveedorEditForm').style.display = proveedorEditing ? '' : 'none';
   document.getElementById('proveedorProfileView').style.display = proveedorEditing ? 'none' : '';
   if(!proveedorEditing) renderProveedorProfileView();
+  renderProveedorAnalytics();
   renderProveedorJobs();
 }
 document.querySelectorAll('#proveedorCategoriaTabs .auth-type-btn').forEach(btn => {
@@ -3687,6 +3783,7 @@ function renderList(){
     const vistaClass = vistaKnown ? (p.vista.toLowerCase().includes('mar') ? 'tag-below' : 'tag-inline') : 'tag-unknown';
     const vistaTitle = p.vista_nota ? p.vista_nota.replace(/"/g,'&quot;') : '';
     const vistaTag = '<span class="tag ' + vistaClass + '" title="' + vistaTitle + '">Vista: ' + p.vista + '</span>';
+    const estiloTag = p._estilo ? '<span class="tag tag-inline">Estilo: ' + p._estilo + '</span>' : '';
     const verifTag = '<span class="tag tag-unverified" title="Dato del catálogo del banco, sin visita en sitio">Sin verificar en sitio</span>';
 
     if(true){
@@ -3722,7 +3819,7 @@ function renderList(){
       }
       const tagsHtml = '<div class="card-tags">' + vendedorTag + ocupTag + marketTag + '</div>' +
         '<details class="card-more"><summary>Detalles de la fuente</summary>' +
-          '<div class="card-tags">' + timeTag + vistaTag + verifTag + '</div>' +
+          '<div class="card-tags">' + timeTag + vistaTag + estiloTag + verifTag + '</div>' +
         '</details>';
       const viewBtn = p.link
         ? '<a class="btn btn-view" href="' + p.link + '" target="_blank" rel="noopener"><span class="btn-icon-circle">' + ICON_CAMERA + '</span>Fotos</a>'
@@ -3849,6 +3946,7 @@ renderVendedorChips();
 renderTypeChips();
 renderZoneChips();
 renderVistaChips();
+renderEstiloChips();
 renderAmenidadesChips();
 updateDealCount();
 dealSelect.addEventListener('change', updateDealCount);
@@ -3878,38 +3976,46 @@ const SMART_TYPE_MAP = [
   [/\b(comercial(es)?|locales?|edificios?|oficinas?)\b/i, 'Comercial'],
 ];
 const SMART_AMENITY_MAP = [
-  [/\b(piscinas?|piletas?|pool)\b/i, 'Piscina'],
+  [/\b(piscinas?|piletas?|pool|alberca)\b/i, 'Piscina'],
   [/\bgolf\b/i, 'Campo de golf'],
   [/club de playa|beach club/i, 'Club de playa'],
   [/\brestaurante\b/i, 'Restaurante'],
-  [/\b(gym|gimnasio)\b/i, 'Gym'],
+  [/\b(gym|gimnasio|sala de ejercicios?)\b/i, 'Gym'],
   [/\bp[aá]del\b/i, 'Cancha de pádel'],
   [/\btenis\b/i, 'Cancha de tenis'],
   [/\bf[uú]tbol\b/i, 'Cancha de fútbol'],
-  [/\b(ni[ñn]os|juegos infantiles|kids)\b/i, 'Área de niños'],
-  [/\b(seguridad|vigilancia)\b/i, 'Seguridad 24/7'],
+  [/\b(ni[ñn]os|juegos infantiles|kids|parque infantil)\b/i, 'Área de niños'],
+  [/\b(seguridad|vigilancia|port[oó]n el[eé]ctrico|caseta de seguridad|cercad[oa]|amurallad[oa])\b/i, 'Seguridad 24/7'],
   [/\b(ascensor|elevador)\b/i, 'Ascensor'],
-  [/\b(estacionamiento|parqueo|parking)\b/i, 'Estacionamiento'],
+  [/\b(estacionamiento|parqueo|parking|garaje|cochera)\b/i, 'Estacionamiento'],
 ];
 const SMART_VISTA_MAP = [
-  [/\b(mar|oc[eé]ano|marina)\b/i, 'Mar'],
+  [/\b(mar|oc[eé]ano|marina|costa|frente al mar|vista al mar)\b/i, 'Mar'],
   [/\bplaya\b/i, 'Playa'],
   [/\blago\b/i, 'Lago'],
   [/\br[ií]o\b/i, 'Río'],
   [/\bjard[ií]n\b/i, 'Jardín'],
-  [/\bmonta[ñn]a/i, 'Montañas'],
+  [/\b(monta[ñn]a|cerro|sierra)/i, 'Montañas'],
   [/\bgolf\b/i, 'Campo de Golf'],
 ];
+// "Estilo" no viene en los datos originales de los bancos (sus PDF no lo incluyen) — lo
+// inferimos de las notas cuando el banco lo menciona (ver el DATA.forEach más arriba) y acá lo
+// hacemos buscable igual, en vez de dejarlo como "no soportado" — es lo que Pablo pidió después
+// de ver que "moderno" no hacía nada.
+const SMART_ESTILO_MAP = [
+  [/\b(modern[oa]|contempor[aá]ne[oa]|minimalista)\b/i, 'Moderno'],
+  [/\b(r[uú]stic[oa]|caba[ñn]a|campestre|estilo caba[ñn]a)\b/i, 'Rústico'],
+  [/\b(colonial|cl[aá]sic[oa]|tradicional)\b/i, 'Clásico'],
+];
 const SMART_UNSUPPORTED_MAP = [
-  [/\b(moderno|moderna)\b/i, 'estilo "moderno"'],
-  [/\b(antiguo|antigua|colonial)\b/i, 'estilo "antiguo/colonial"'],
   [/\b(\d+)\s*(pisos|plantas|niveles)\b/i, 'cantidad de pisos'],
 ];
 function parseSmartSearch(text){
-  const result = { categorias:[], amenidades:[], vista:null, habMin:0, banosMin:0, priceMax:null, unsupported:[] };
+  const result = { categorias:[], amenidades:[], vista:null, estilo:null, habMin:0, banosMin:0, priceMax:null, unsupported:[] };
   SMART_TYPE_MAP.forEach(([re,val]) => { if(re.test(text) && !result.categorias.includes(val)) result.categorias.push(val); });
   SMART_AMENITY_MAP.forEach(([re,val]) => { if(re.test(text) && !result.amenidades.includes(val)) result.amenidades.push(val); });
   for(const [re,val] of SMART_VISTA_MAP){ if(re.test(text)){ result.vista = val; break; } }
+  for(const [re,val] of SMART_ESTILO_MAP){ if(re.test(text)){ result.estilo = val; break; } }
   const habMatch = text.match(/(\d+)\s*(hab(itaciones?)?|cuartos?|dormitorios?|rec[aá]maras?)\b/i);
   if(habMatch) result.habMin = Math.min(parseInt(habMatch[1],10), 4);
   const banosMatch = text.match(/(\d+)\s*(ba[ñn]os?)\b/i);
@@ -3929,6 +4035,7 @@ function renderSmartSummary(parsed, leftoverZone){
   parsed.categorias.forEach(c => chips.push(['Tipo: ' + c, () => { activeCategorias = activeCategorias.filter(x=>x!==c); renderTypeChips(); renderList(); renderSmartSummary(parsed, leftoverZone); }]));
   parsed.amenidades.forEach(a => chips.push([a, () => { activeAmenidades = activeAmenidades.filter(x=>x!==a); renderAmenidadesChips(); renderList(); renderSmartSummary(parsed, leftoverZone); }]));
   if(parsed.vista) chips.push(['Vista: ' + parsed.vista, () => { activeVista='Todos'; vistaToolbar.value='Todos'; parsed.vista=null; renderList(); renderSmartSummary(parsed, leftoverZone); }]);
+  if(parsed.estilo) chips.push(['Estilo: ' + parsed.estilo, () => { activeEstilo='Todos'; estiloToolbar.value='Todos'; parsed.estilo=null; renderList(); renderSmartSummary(parsed, leftoverZone); }]);
   if(parsed.habMin > 0) chips.push([parsed.habMin + '+ hab.', () => { document.getElementById('habMinSelect').value='0'; parsed.habMin=0; renderList(); renderSmartSummary(parsed, leftoverZone); }]);
   if(parsed.banosMin > 0) chips.push([parsed.banosMin + '+ baños', () => { document.getElementById('banosMinSelect').value='0'; parsed.banosMin=0; renderList(); renderSmartSummary(parsed, leftoverZone); }]);
   if(parsed.priceMax) chips.push(['Hasta ' + money(parsed.priceMax), () => { document.getElementById('priceMaxInput').value=''; parsed.priceMax=null; renderList(); renderSmartSummary(parsed, leftoverZone); }]);
@@ -3956,12 +4063,14 @@ document.getElementById('heroSearchBtn').addEventListener('click', () => {
   renderAmenidadesChips();
   activeVista = parsed.vista || 'Todos';
   vistaToolbar.value = activeVista;
+  activeEstilo = parsed.estilo || 'Todos';
+  estiloToolbar.value = activeEstilo;
   document.getElementById('habMinSelect').value = String(parsed.habMin);
   document.getElementById('banosMinSelect').value = String(parsed.banosMin);
   document.getElementById('priceMaxInput').value = parsed.priceMax || '';
   // Si no entendimos nada estructurado, tratamos todo el texto como nombre de zona/proyecto —
   // el comportamiento original de este buscador, para no perder los casos simples ("Casamar").
-  const understoodSomething = parsed.categorias.length || parsed.amenidades.length || parsed.vista || parsed.habMin || parsed.banosMin || parsed.priceMax;
+  const understoodSomething = parsed.categorias.length || parsed.amenidades.length || parsed.vista || parsed.estilo || parsed.habMin || parsed.banosMin || parsed.priceMax;
   const leftoverZone = understoodSomething ? '' : text;
   document.getElementById('zonaTextInput').value = leftoverZone;
   document.getElementById('searchSubmitBtn').click();
@@ -3979,27 +4088,40 @@ const heroMicBtn = document.getElementById('heroMicBtn');
 if(SpeechRecognitionAPI){
   const recognition = new SpeechRecognitionAPI();
   recognition.lang = 'es-PA';
-  recognition.continuous = false;
-  recognition.interimResults = false;
+  // continuous:true — que NO corte solo a los pocos segundos de silencio (eso frustraba: uno
+  // hace una pausa pensando qué más decir y ya se cortaba). Ahora empieza/termina con el mismo
+  // botón: un clic para hablar, otro clic cuando terminaste — recién ahí se dispara la búsqueda.
+  recognition.continuous = true;
+  recognition.interimResults = true;
   let listening = false;
+  let finalTranscript = '';
   heroMicBtn.addEventListener('click', () => {
     if(listening) { recognition.stop(); return; }
+    finalTranscript = '';
+    document.getElementById('heroSearchInput').value = '';
     try{ recognition.start(); } catch(e){ /* ya estaba escuchando */ }
   });
   recognition.addEventListener('start', () => {
     listening = true;
     heroMicBtn.classList.add('listening');
-    document.getElementById('heroSearchInput').placeholder = 'Escuchando… decí qué buscás';
+    document.getElementById('heroSearchInput').placeholder = 'Escuchando… tocá el micrófono de nuevo cuando termines';
   });
   recognition.addEventListener('end', () => {
     listening = false;
     heroMicBtn.classList.remove('listening');
     document.getElementById('heroSearchInput').placeholder = 'Ej. Casa moderna con piscina y vista al mar, 3 habitaciones, cerca de Coronado...';
+    if(document.getElementById('heroSearchInput').value.trim()){
+      document.getElementById('heroSearchBtn').click();
+    }
   });
   recognition.addEventListener('result', (e) => {
-    const transcript = e.results[0][0].transcript;
-    document.getElementById('heroSearchInput').value = transcript;
-    document.getElementById('heroSearchBtn').click();
+    let interim = '';
+    for(let i = e.resultIndex; i < e.results.length; i++){
+      const piece = e.results[i][0].transcript;
+      if(e.results[i].isFinal) finalTranscript += piece + ' ';
+      else interim += piece;
+    }
+    document.getElementById('heroSearchInput').value = (finalTranscript + interim).trim();
   });
   recognition.addEventListener('error', () => {
     listening = false;
