@@ -2696,15 +2696,35 @@ function pointInPolygon(lat, lon, latlngs){
 // Datos reales vía Overpass API (OpenStreetMap), consultados sobre el área visible del mapa —
 // ponytail: sin caché entre paneos del mapa (si el usuario mueve el mapa y reactiva la capa, se
 // vuelve a consultar); suficiente para un demo, cachear por bounding box sería la mejora natural.
+// Iconos como SVG trazado en blanco (no emoji) — el carrito de supermercado en emoji quedaba
+// azul sobre un pin azul, casi invisible; con SVG controlamos el color nosotros, siempre blanco
+// sobre el color del pin, así que el contraste queda garantizado sin importar el emoji del SO.
+const POI_ICON_SVGS = {
+  hospital: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+  pharmacy: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="9" width="17" height="6" rx="3"/><line x1="12" y1="9" x2="12" y2="15"/></svg>',
+  supermarket: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9.5" cy="20" r="1.3"/><circle cx="17.5" cy="20" r="1.3"/><path d="M2.5 3h2l2.1 12.2a2 2 0 0 0 2 1.6h8.3a2 2 0 0 0 2-1.6L20.5 7H6.2"/></svg>',
+  school: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4 2.5 9l9.5 5 9.5-5L12 4z"/><path d="M6.5 11.3V16c0 1.4 2.5 2.7 5.5 2.7s5.5-1.3 5.5-2.7v-4.7"/></svg>',
+  mall: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8h12l-1 12.5a1.5 1.5 0 0 1-1.5 1.5h-7a1.5 1.5 0 0 1-1.5-1.5L6 8z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg>',
+};
 const POI_DEFS = {
-  hospital:    { label: 'Hospital',         icon: '🏥', color: '#C1592F', tags: ['amenity=hospital'] },
-  pharmacy:    { label: 'Farmacia',         icon: '💊', color: '#3E7C59', tags: ['amenity=pharmacy'] },
-  supermarket: { label: 'Supermercado',     icon: '🛒', color: '#2B6CB0', tags: ['shop=supermarket'] },
-  school:      { label: 'Escuela',          icon: '🏫', color: '#7C4A9E', tags: ['amenity=school'] },
-  mall:        { label: 'Centro comercial', icon: '🏬', color: '#C79A3C', tags: ['shop=mall'] }
+  hospital:    { label: 'Hospital',         icon: POI_ICON_SVGS.hospital,     color: '#C1592F', tags: ['amenity=hospital'] },
+  pharmacy:    { label: 'Farmacia',         icon: POI_ICON_SVGS.pharmacy,     color: '#3E7C59', tags: ['amenity=pharmacy'] },
+  supermarket: { label: 'Supermercado',     icon: POI_ICON_SVGS.supermarket,  color: '#0F766E', tags: ['shop=supermarket'] },
+  school:      { label: 'Escuela',          icon: POI_ICON_SVGS.school,       color: '#7C4A9E', tags: ['amenity=school'] },
+  mall:        { label: 'Centro comercial', icon: POI_ICON_SVGS.mall,         color: '#C79A3C', tags: ['shop=mall'] }
 };
 let poiLayers = {};
 
+// El servidor público de Overpass (overpass-api.de) se satura seguido y devuelve error o timeout
+// aunque la consulta esté bien armada — no es un problema nuestro, es el server compartido y
+// gratuito. Antes probábamos solo ese servidor y si fallaba, mostrábamos "error, reintenta" —
+// pero casi siempre alcanza con probar un espejo distinto. Ahora probamos 3 espejos en orden y
+// solo mostramos error si los 3 fallan.
+const OVERPASS_MIRRORS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+  'https://lz4.overpass-api.de/api/interpreter',
+];
 async function fetchPoi(key){
   const b = map.getBounds();
   const bbox = b.getSouth() + ',' + b.getWest() + ',' + b.getNorth() + ',' + b.getEast();
@@ -2716,19 +2736,25 @@ async function fetchPoi(key){
     return 'node["' + k + '"="' + v + '"](' + bbox + ');';
   }).join('');
   const q = '[out:json][timeout:15];(' + filters + ');out center 80;';
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 25000);
-  let res;
-  try{
-    res = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', body: q, signal: controller.signal });
-  } finally {
-    clearTimeout(timeoutId);
+  let lastError;
+  for(const url of OVERPASS_MIRRORS){
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
+    try{
+      const res = await fetch(url, { method: 'POST', body: q, signal: controller.signal });
+      clearTimeout(timeoutId);
+      if(!res.ok) throw new Error('overpass error ' + res.status);
+      const data = await res.json();
+      return data.elements
+        .map(el => ({ lat: el.lat || (el.center && el.center.lat), lon: el.lon || (el.center && el.center.lon), name: el.tags && el.tags.name }))
+        .filter(f => f.lat && f.lon);
+    } catch(e){
+      clearTimeout(timeoutId);
+      lastError = e;
+      // probar el siguiente espejo
+    }
   }
-  if(!res.ok) throw new Error('overpass error');
-  const data = await res.json();
-  return data.elements
-    .map(el => ({ lat: el.lat || (el.center && el.center.lat), lon: el.lon || (el.center && el.center.lon), name: el.tags && el.tags.name }))
-    .filter(f => f.lat && f.lon);
+  throw lastError || new Error('overpass error');
 }
 
 async function togglePoiLayer(chip){
