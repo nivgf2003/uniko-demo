@@ -1870,6 +1870,32 @@
 </div>
 
 <div class="app-layout">
+<main class="main-content">
+<div class="content-tabs" id="contentTabs">
+  <button type="button" class="content-tab active" data-tab="mapa">Mapa</button>
+  <button type="button" class="content-tab" data-tab="proveedores">Proveedores</button>
+</div>
+
+<div id="mapaTabPane" class="mapa-tab-pane">
+<div class="map-section">
+  <div class="map-section-title">Dibujá el área en el mapa</div>
+  <div class="map-section-sub">Trazá con el dedo o el mouse la parte del mapa que te interesa — no hace falta conocer los nombres de las zonas de Panamá. También podés buscar por nombre de zona en el panel de filtros o arriba.</div>
+  <div id="mapContainer"></div>
+  <div class="map-controls">
+    <button type="button" class="map-clear-btn" id="mapBackToOverviewBtn" style="display:none;">← Ver todas las zonas</button>
+    <button type="button" class="map-draw-btn" id="mapDrawBtn">Dibujar área en el mapa</button>
+    <button type="button" class="map-clear-btn" id="mapClearBtn" style="display:none;">✕ Borrar área</button>
+  </div>
+  <div class="map-layers" id="mapLayers">
+    <button type="button" class="map-layer-chip" data-poi="hospital">🏥 Hospital</button>
+    <button type="button" class="map-layer-chip" data-poi="pharmacy">💊 Farmacia</button>
+    <button type="button" class="map-layer-chip" data-poi="supermarket">🛒 Supermercado</button>
+    <button type="button" class="map-layer-chip" data-poi="school">🏫 Escuela</button>
+    <button type="button" class="map-layer-chip" data-poi="mall">🏬 Centro comercial</button>
+  </div>
+  <div class="map-section-sub" style="margin-top:6px; margin-bottom:0;">Datos reales de OpenStreetMap — puede tardar unos segundos, funciona mejor con el mapa acercado a la zona que te interesa.</div>
+</div>
+
 <aside class="sidebar-filters">
 <div class="filter-label">Tipo de propiedad</div>
 <details class="amenity-dropdown" id="typeDropdown">
@@ -2036,32 +2062,6 @@
   <button type="button" class="afford-calc-btn" id="searchSubmitBtn">Buscar propiedades</button>
 </div>
 </aside>
-
-<main class="main-content">
-<div class="content-tabs" id="contentTabs">
-  <button type="button" class="content-tab active" data-tab="mapa">Mapa</button>
-  <button type="button" class="content-tab" data-tab="proveedores">Proveedores</button>
-</div>
-
-<div id="mapaTabPane" class="mapa-tab-pane">
-<div class="map-section">
-  <div class="map-section-title">Dibujá el área en el mapa</div>
-  <div class="map-section-sub">Trazá con el dedo o el mouse la parte del mapa que te interesa — no hace falta conocer los nombres de las zonas de Panamá. También podés buscar por nombre de zona en el panel de filtros o arriba.</div>
-  <div id="mapContainer"></div>
-  <div class="map-controls">
-    <button type="button" class="map-clear-btn" id="mapBackToOverviewBtn" style="display:none;">← Ver todas las zonas</button>
-    <button type="button" class="map-draw-btn" id="mapDrawBtn">Dibujar área en el mapa</button>
-    <button type="button" class="map-clear-btn" id="mapClearBtn" style="display:none;">✕ Borrar área</button>
-  </div>
-  <div class="map-layers" id="mapLayers">
-    <button type="button" class="map-layer-chip" data-poi="hospital">🏥 Hospital</button>
-    <button type="button" class="map-layer-chip" data-poi="pharmacy">💊 Farmacia</button>
-    <button type="button" class="map-layer-chip" data-poi="supermarket">🛒 Supermercado</button>
-    <button type="button" class="map-layer-chip" data-poi="school">🏫 Escuela</button>
-    <button type="button" class="map-layer-chip" data-poi="mall">🏬 Centro comercial</button>
-  </div>
-  <div class="map-section-sub" style="margin-top:6px; margin-bottom:0;">Datos reales de OpenStreetMap — puede tardar unos segundos, funciona mejor con el mapa acercado a la zona que te interesa.</div>
-</div>
 
 <div class="results-col">
 <div id="smartSearchSummary" style="display:none;"></div>
