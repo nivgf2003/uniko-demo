@@ -1547,11 +1547,22 @@
     }
     /* Mapa a la derecha, listado al medio — como Green-Acres. El orden visual se invierte con
        flex `order`; el HTML no cambia. El mapa se queda grande de verdad: llena el alto
-       disponible en vez de limitarse por aspect-ratio, que era lo que lo hacía verse chico. */
+       disponible en vez de limitarse por aspect-ratio, que era lo que lo hacía verse chico.
+       Ojo con las 3 columnas compartiendo el mismo flex row ahora (antes el sidebar vivía
+       afuera): usar % de flex-basis en dos columnas cuando hay una tercera de ancho fijo hace
+       que se pasen del 100% y una de las dos termine apretada con scroll horizontal — pasó con
+       el listado. La solución real es dar al listado un ancho FIJO que le alcance para una sola
+       columna de tarjetas sin scroll lateral, y que el mapa se quede con todo lo que sobra. */
+    .mapa-tab-pane .results-col{
+      order:1;
+      flex:0 0 336px;
+      overflow-y:auto;
+      overflow-x:hidden;
+    }
     .mapa-tab-pane .map-section{
       order:2;
-      flex:0 0 58%;
-      max-width:58%;
+      flex:1 1 auto;
+      min-width:0;
       height:100%;
       display:flex;
       flex-direction:column;
@@ -1567,13 +1578,6 @@
     .mapa-tab-pane .map-controls,
     .mapa-tab-pane .map-layers,
     .mapa-tab-pane .map-section > .map-section-sub:last-child{ flex-shrink:0; }
-    .mapa-tab-pane .results-col{
-      order:1;
-      flex:1 1 42%;
-      min-width:0;
-      height:100%;
-      overflow-y:auto;
-    }
   }
   .map-section-title{
     font-family:var(--font-serif);
