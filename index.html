@@ -135,6 +135,16 @@
       background:linear-gradient(rgba(11,43,41,.6), rgba(15,118,110,.45));
       z-index:1;
     }
+    /* La foto tiene que dominar la pantalla, no ser un fondo angosto detrás de un bloque de
+       texto chico — como en Green-Acres, donde la foto ocupa casi toda la primera pantalla y
+       recién al final se asoma un poco de lo que sigue. min-height (no height) para que igual
+       crezca si el texto no entra. */
+    .hero.hero-photo{
+      min-height:calc(88vh - var(--header-h, 64px));
+      display:flex;
+      align-items:center;
+    }
+    .hero.hero-photo .hero-inner{ width:100%; }
   }
   .hero-inner{ max-width:720px; margin:0 auto; position:relative; z-index:2; }
   .hero-title, .hero-sub{ text-shadow:0 1px 12px rgba(0,0,0,.25); }
@@ -205,8 +215,10 @@
   @keyframes mic-pulse{ 0%,100%{ opacity:1; } 50%{ opacity:.4; } }
   @media (max-width:520px){
     .hero{ padding:44px 18px 38px; }
-    .hero-search{ flex-direction:column; border-radius:14px; }
-    .hero-search button{ padding:13px; }
+    .hero-search{ flex-direction:column; border-radius:16px; padding:9px; }
+    .hero-search input{ padding:16px; font-size:1rem; }
+    .hero-search button{ padding:16px; font-size:.95rem; }
+    #heroMicBtn{ padding:8px; }
   }
 
   /* --- Schematic map --- */
