@@ -3153,15 +3153,18 @@ function openAuthModal(mode){
   const bancoTab = document.querySelector('#authTypeTabs .auth-type-btn[data-tipo="banco"]');
   const proveedorTab = document.querySelector('#authTypeTabs .auth-type-btn[data-tipo="proveedor"]');
   const compradorTab = document.querySelector('#authTypeTabs .auth-type-btn[data-tipo="comprador"]');
-  if(mode === 'institucional'){
+  if(mode === 'institucional' || mode === 'banco' || mode === 'proveedor'){
     typeSection.style.display = '';
     compradorTab.style.display = 'none';
-    bancoTab.style.display = '';
-    proveedorTab.style.display = '';
-    title.textContent = 'Acceso institucional';
+    // 'banco'/'proveedor' son links dedicados a un solo tipo (pedido de Niv: un link distinto
+    // para cada uno, no uno solo con los dos juntos) — esconden la otra pestaña por completo.
+    bancoTab.style.display = (mode === 'proveedor') ? 'none' : '';
+    proveedorTab.style.display = (mode === 'banco') ? 'none' : '';
+    title.textContent = mode === 'proveedor' ? 'Acceso de proveedor de servicio' : (mode === 'banco' ? 'Acceso de institución financiera' : 'Acceso institucional');
     sub.textContent = 'Solo para bancos y proveedores de servicio — esta entrada no es parte del sitio público de compradores.';
-    authSelectedTipo = 'banco';
-    document.querySelectorAll('#authTypeTabs .auth-type-btn').forEach(b => b.classList.toggle('active', b === bancoTab));
+    authSelectedTipo = mode === 'proveedor' ? 'proveedor' : 'banco';
+    const preselect = mode === 'proveedor' ? proveedorTab : bancoTab;
+    document.querySelectorAll('#authTypeTabs .auth-type-btn').forEach(b => b.classList.toggle('active', b === preselect));
   } else {
     typeSection.style.display = 'none';
     title.textContent = 'Crea tu cuenta o inicia sesión';
@@ -3175,10 +3178,17 @@ document.getElementById('authCloseBtn').addEventListener('click', closeAuthModal
 authOverlay.addEventListener('click', (e) => { if(e.target === authOverlay) closeAuthModal(); });
 
 // Acceso institucional (banco/proveedor): a propósito NO hay ningún link visible para esto en el
-// sitio público — un comprador no debe poder descubrirlo. Se entra solo sabiendo la URL exacta:
-// index.html#institucional. Quien la conozca (banco, proveedor, o quien hace la demo) la guarda
-// como marcador; nadie más la ve.
-if(location.hash === '#institucional'){ openAuthModal('institucional'); }
+// sitio público — un comprador no debe poder descubrirlo. Se entra solo sabiendo la URL exacta.
+// Se acepta tanto ?portal=... como #institucional — el hash (#) a veces se pierde al compartir un
+// link por WhatsApp/redes (algunas apps arman la vista previa pegándole solo a la URL sin el
+// fragmento, y algunos navegadores "limpian" la barra de direcciones), mientras que un parámetro
+// de consulta (?portal=banco) es parte real de la URL y no se pierde nunca al compartir.
+const portalParam = new URLSearchParams(location.search).get('portal');
+if(portalParam === 'banco' || portalParam === 'proveedor'){
+  openAuthModal(portalParam);
+} else if(portalParam === 'institucional' || location.hash === '#institucional'){
+  openAuthModal('institucional');
+}
 
 document.querySelectorAll('#authTypeTabs .auth-type-btn').forEach(btn => {
   btn.addEventListener('click', () => {
