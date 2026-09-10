@@ -1140,13 +1140,16 @@
   .tag-unverified{ background:#EDEDED; color:#7A7A7A; }
   .sortbar{
     display:flex;
+    flex-wrap:wrap;
     align-items:center;
     justify-content:space-between;
+    gap:8px;
     padding:10px 16px;
     font-size:.78rem;
     color:var(--ink-soft);
     border-bottom:1px solid var(--line);
   }
+  .sortbar #sortSelect{ flex-shrink:0; }
   .sortbar select{
     font-family:inherit;
     font-size:.78rem;
@@ -1156,7 +1159,7 @@
     background:var(--white);
     color:var(--ink);
   }
-  .list-view-toggle{ display:flex; gap:6px; }
+  .list-view-toggle{ display:flex; flex-wrap:wrap; gap:6px; }
   .list-view-btn{
     font-family:inherit;
     font-size:.72rem;
