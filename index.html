@@ -1156,6 +1156,24 @@
     background:var(--white);
     color:var(--ink);
   }
+  .list-view-toggle{ display:flex; gap:6px; }
+  .list-view-btn{
+    font-family:inherit;
+    font-size:.72rem;
+    font-weight:600;
+    padding:5px 10px;
+    border-radius:var(--radius-pill);
+    border:1px solid var(--line);
+    background:var(--white);
+    color:var(--ink-soft);
+    cursor:pointer;
+  }
+  .list-view-btn.active{ background:var(--action); border-color:var(--action); color:#fff; }
+  .fav-btn{
+    background:none; border:none; cursor:pointer; padding:2px; line-height:1;
+    font-size:1.15rem; color:var(--line); flex-shrink:0;
+  }
+  .fav-btn.active{ color:var(--action); }
   #list{
     padding:12px 16px 32px;
     display:grid;
@@ -2239,6 +2257,11 @@
 
 <div class="sortbar" id="sortbarWrap" style="display:none;">
   <span id="resultCount">0 propiedades</span>
+  <div class="list-view-toggle" id="listViewToggle" style="display:none;">
+    <button type="button" class="list-view-btn active" data-view="todos">Todas</button>
+    <button type="button" class="list-view-btn" data-view="favoritos">❤ Favoritos</button>
+    <button type="button" class="list-view-btn" data-view="recientes">🕘 Recientes</button>
+  </div>
   <select id="sortSelect">
     <option value="price-desc">Precio: mayor a menor</option>
     <option value="price-asc">Precio: menor a mayor</option>
@@ -2291,6 +2314,7 @@
   <div class="map-section-title">Panel del banco</div>
   <div class="map-section-sub" id="bancoWelcome" style="margin-bottom:14px;"></div>
   <div id="bancoAnalytics"></div>
+  <div id="bancoCapital" style="margin-bottom:14px;"></div>
   <button type="button" class="auth-btn" id="bancoAddBtn" style="margin-bottom:14px;">+ Agregar propiedad</button>
   <div id="bancoAddForm" class="banco-form" style="display:none;">
     <div class="banco-form-grid">
@@ -2318,6 +2342,9 @@
     <button type="button" class="sim-calc-btn" id="bancoSaveBtn">Guardar propiedad</button>
   </div>
   <div id="bancoInventoryList"></div>
+  <div class="map-section-title" style="margin-top:24px;">Venta en bloque / subastas institucionales</div>
+  <div class="map-section-sub" style="margin-bottom:10px;">Marcá propiedades disponibles de tu cartera (recomendado: las más estancadas — ver "Prioridad de venta" más arriba) y armá un paquete para ofrecer a inversionistas institucionales de una sola vez, en vez de esperar la venta individual.</div>
+  <div id="bancoBulkSale"></div>
   <div class="auth-note" style="margin-top:16px;">Demo: este inventario se guarda solo en este navegador (localStorage) — no hay servidor real todavía, y estas propiedades no aparecen en el catálogo del comprador. Sirve para mostrar el flujo de carga del banco (ver sección 12 del README, punto 4).</div>
 </main>
 </div>
@@ -3117,6 +3144,38 @@ const dealSelect = document.getElementById('dealSelect');
 dealSelect.addEventListener('change', renderList);
 
 let pinnedId = null; // id de la propiedad que se puso primera en la lista al hacer click en el mapa
+let listViewMode = 'todos'; // 'todos' | 'favoritos' | 'recientes' — spec Comprador E (perfil: favoritos e historial)
+
+// -- Favoritos e historial de vistos (spec Módulo Comprador, sección E) — solo tiene sentido con
+// sesión iniciada (se guarda por usuario, mismo patrón de clave que bancoStorageKey). --
+function userScopedKey(prefix){
+  if(!currentUser) return null;
+  return prefix + '_' + (currentUser.email || currentUser.name);
+}
+function getFavoritos(){
+  const key = userScopedKey('uniko_favoritos');
+  if(!key) return [];
+  try{ return JSON.parse(localStorage.getItem(key) || '[]'); }catch(e){ return []; }
+}
+function toggleFavorito(id){
+  const key = userScopedKey('uniko_favoritos');
+  if(!key) return;
+  let favs = getFavoritos();
+  favs = favs.includes(id) ? favs.filter(x => x !== id) : favs.concat([id]);
+  localStorage.setItem(key, JSON.stringify(favs));
+}
+function getHistorial(){
+  const key = userScopedKey('uniko_historial');
+  if(!key) return [];
+  try{ return JSON.parse(localStorage.getItem(key) || '[]'); }catch(e){ return []; }
+}
+function trackHistorial(id){
+  const key = userScopedKey('uniko_historial');
+  if(!key) return;
+  let hist = getHistorial().filter(x => x !== id);
+  hist.unshift(id);
+  localStorage.setItem(key, JSON.stringify(hist.slice(0, 20)));
+}
 let activeCategorias = []; // multi-select: array vacío = todos los tipos
 const typeToolbar = document.getElementById('typeToolbar');
 const typeSummary = document.getElementById('typeSummary');
@@ -3199,6 +3258,15 @@ function getFiltered(){
   // Fuera de presupuesto: no se oculta, se bloquea (blur) para que el comprador
   // vea que existe y considere ajustar su financiamiento.
   arr.forEach(d => { d._locked = budgetMax !== null && d.precio !== null && d.precio > budgetMax; });
+  if(listViewMode === 'favoritos'){
+    const favs = getFavoritos();
+    arr = arr.filter(d => favs.includes(d._id));
+  } else if(listViewMode === 'recientes'){
+    const hist = getHistorial();
+    arr = arr.filter(d => hist.includes(d._id));
+    arr.sort((a,b) => hist.indexOf(a._id) - hist.indexOf(b._id)); // más reciente primero
+    return arr;
+  }
   const sortVal = sortSelect.value;
   arr.sort((a,b) => {
     // Al hacer click en un pin del mapa, esa propiedad salta al principio de la lista
@@ -3479,11 +3547,93 @@ function renderBancoAnalytics(inv){
       topHtml +
     '</div>';
 }
+
+// -- Capital regulatorio / provisión (spec Módulo Banco, sección A.1/F, F.8.1 del máster plan) --
+// El dolor real de un banco no es "vender lento", es capital regulatorio atado (Acuerdo 3-2009 SBP)
+// mientras más tiempo tiene un bien adjudicado sin vender. Como no tenemos fecha real de adjudicación
+// en el inventario del demo, la "antigüedad" es un estimado ilustrativo (stableFakeNumber, mismo
+// patrón que el resto del dashboard DEMO) — pero la TABLA de % de provisión por antigüedad es
+// configurable de verdad por el banco (nunca la inventamos), tal como pide el documento.
+function bancoProvisionTable(){
+  const key = bancoStorageKey() + '_provision';
+  try{
+    const saved = JSON.parse(localStorage.getItem(key));
+    if(Array.isArray(saved) && saved.length === 4) return saved;
+  }catch(e){}
+  return [0, 10, 25, 50]; // % ilustrativo por defecto: 0-3m, 3-6m, 6-12m, 12m+
+}
+function saveBancoProvisionTable(arr){
+  localStorage.setItem(bancoStorageKey() + '_provision', JSON.stringify(arr));
+}
+const ANTIGUEDAD_LABELS = ['0–3 meses','3–6 meses','6–12 meses','12+ meses'];
+function antiguedadBucket(meses){
+  return meses < 3 ? 0 : meses < 6 ? 1 : meses < 12 ? 2 : 3;
+}
+// Compartido entre el dashboard de capital y el simulador de venta en bloque — misma cuenta,
+// un solo lugar (evita que las dos pantallas muestren números distintos para la misma propiedad).
+function capitalRegulatorioFor(p, tabla){
+  const meses = stableFakeNumber(p.nombre + p.zona + 'ant', 1, 20);
+  const bucket = antiguedadBucket(meses);
+  const pct = tabla[bucket];
+  const capital = (p.precio || 0) * pct / 100;
+  return { p, meses, bucket, pct, capital };
+}
+function renderBancoCapital(inv){
+  const box = document.getElementById('bancoCapital');
+  if(!box) return;
+  const tabla = bancoProvisionTable();
+  const activos = inv.filter(p => (p.estado || 'Disponible') !== 'Vendido' && (p.estado || 'Disponible') !== 'Retirado');
+  const items = activos.map(p => capitalRegulatorioFor(p, tabla));
+  const totalCapital = items.reduce((s,i) => s + i.capital, 0);
+  const proximoEscalon = items.filter(i => (i.bucket===0 && i.meses>=2) || (i.bucket===1 && i.meses>=5) || (i.bucket===2 && i.meses>=11));
+  const ranked = items.slice().sort((a,b) => b.capital - a.capital).slice(0, 5);
+  const maxCapital = Math.max(1, ...ranked.map(i => i.capital));
+  const top5Sum = ranked.reduce((s,i) => s + i.capital, 0);
+
+  const provisionInputs = tabla.map((v,i) =>
+    '<div><label style="font-size:.72rem; color:var(--ink-soft); display:block; margin-bottom:2px;">' + ANTIGUEDAD_LABELS[i] + '</label>' +
+    '<input type="number" class="banco-provision-input" data-idx="' + i + '" value="' + v + '" min="0" max="100" style="width:100%;">%</div>'
+  ).join('');
+
+  box.innerHTML =
+    '<div class="analytics-demo-banner"><span class="analytics-demo-tag">DEMO</span> La antigüedad en cartera es un valor ilustrativo (no tenemos fecha real de adjudicación en este demo) — la tabla de % de provisión sí la configurás vos, como en la operación real.</div>' +
+    '<div class="analytics-kpis">' +
+      '<div class="analytics-kpi"><div class="analytics-kpi-value">' + money(totalCapital) + '</div><div class="analytics-kpi-label">Capital regulatorio atado (estimado)</div></div>' +
+      '<div class="analytics-kpi"><div class="analytics-kpi-value">' + proximoEscalon.length + '</div><div class="analytics-kpi-label">Propiedades cerca del próximo escalón de provisión</div></div>' +
+      '<div class="analytics-kpi"><div class="analytics-kpi-value">' + money(top5Sum) + '</div><div class="analytics-kpi-label">Se libera si vendés las 5 de mayor impacto en 90 días</div></div>' +
+    '</div>' +
+    '<div class="analytics-market">' +
+      '<div class="analytics-market-title">Tu tabla de provisión por antigüedad <span class="analytics-demo-tag-sm">configurable</span></div>' +
+      '<div class="numfilter-grid" id="bancoProvisionGrid">' + provisionInputs + '</div>' +
+      '<div class="analytics-market-detail" style="margin-top:6px;">% de reserva regulatoria que tu banco aplica según antigüedad en cartera — nunca lo asumimos, lo cargás vos, igual que en la operación real (varía por institución).</div>' +
+    '</div>' +
+    '<div class="analytics-top">' +
+      '<div class="analytics-top-title">Prioridad de venta por impacto de capital</div>' +
+      (ranked.length === 0 ? '<div class="analytics-empty-note">Agregá propiedades para ver el ranking.</div>' : ranked.map(i =>
+        '<div class="analytics-top-row">' +
+          '<div class="analytics-top-name">' + i.p.nombre + '</div>' +
+          '<div class="analytics-top-bar-wrap"><div class="analytics-top-bar" style="width:' + Math.round(100*i.capital/maxCapital) + '%"></div></div>' +
+          '<div class="analytics-top-nums">' + money(i.capital) + ' · ' + ANTIGUEDAD_LABELS[i.bucket] + '</div>' +
+        '</div>'
+      ).join('')) +
+    '</div>';
+
+  box.querySelectorAll('.banco-provision-input').forEach(inp => {
+    inp.addEventListener('change', () => {
+      const arr = bancoProvisionTable();
+      arr[parseInt(inp.dataset.idx, 10)] = parseFloat(inp.value) || 0;
+      saveBancoProvisionTable(arr);
+      renderBancoCapital(getBancoInventory());
+    });
+  });
+}
+
 function renderBancoPanel(){
   document.getElementById('bancoWelcome').textContent = 'Bienvenido, ' + currentUser.name + '. Aquí carga tu banco el inventario que verán los compradores.';
   renderProviderDirectory('bancoDirectory', null, 'banco');
   const inv = getBancoInventory();
   renderBancoAnalytics(inv);
+  renderBancoCapital(inv);
   const listEl = document.getElementById('bancoInventoryList');
   if(inv.length === 0){
     listEl.innerHTML = '<div class="empty">Aún no has agregado ninguna propiedad. Toca "+ Agregar propiedad" para cargar la primera.</div>';
@@ -3500,6 +3650,9 @@ function renderBancoPanel(){
       : '';
     return '<div class="banco-item">' +
       '<div class="banco-item-top">' +
+        ((p.estado || 'Disponible') === 'Disponible'
+          ? '<input type="checkbox" class="banco-item-bulk-check" data-idx="' + i + '" title="Incluir en paquete de venta en bloque">'
+          : '<span style="width:16px; display:inline-block;"></span>') +
         (p.fotos && p.fotos[0]
           ? '<img class="banco-item-thumb" src="' + p.fotos[0] + '">'
           : '<div class="banco-item-thumb"></div>') +
@@ -3536,7 +3689,70 @@ function renderBancoPanel(){
       renderBancoPanel();
     });
   });
+  listEl.querySelectorAll('.banco-item-bulk-check').forEach(cb => {
+    cb.addEventListener('change', updateBancoBulkSummary);
+  });
+  updateBancoBulkSummary();
 }
+
+// -- Venta en bloque / subastas institucionales (spec Módulo Banco, sección H / 8.7) --
+function updateBancoBulkSummary(){
+  const box = document.getElementById('bancoBulkSale');
+  if(!box) return;
+  const inv = getBancoInventory();
+  const checked = Array.from(document.querySelectorAll('.banco-item-bulk-check:checked'))
+    .map(cb => inv[parseInt(cb.dataset.idx, 10)]).filter(Boolean);
+  if(checked.length === 0){
+    box.innerHTML = '<div class="analytics-empty-note">Marcá una o más propiedades disponibles arriba para armar un paquete.</div>';
+    return;
+  }
+  const tabla = bancoProvisionTable();
+  const items = checked.map(p => capitalRegulatorioFor(p, tabla));
+  const totalValor = items.reduce((s,i) => s + (i.p.precio || 0), 0);
+  const capitalLiberado = items.reduce((s,i) => s + i.capital, 0);
+  const descuento = parseInt((document.getElementById('bulkDescuentoSelect') || {}).value || '15', 10);
+  const precioBloque = totalValor * (1 - descuento/100);
+
+  // Ofertas ilustrativas, deterministas según qué propiedades están en el paquete (no cambian
+  // solas al re-renderizar) — DEMO: no hay inversionistas institucionales reales conectados.
+  const seed = checked.map(p => p.nombre).join('|');
+  const ofertas = [
+    { nombre: 'Grupo Inversionista Costa Verde', pct: stableFakeNumber(seed + 'a', 62, 78), dias: stableFakeNumber(seed + 'ad', 20, 40) },
+    { nombre: 'Fondo Privado Andrómeda', pct: stableFakeNumber(seed + 'b', 58, 72), dias: stableFakeNumber(seed + 'bd', 10, 25) },
+  ];
+
+  box.innerHTML =
+    '<div class="analytics-demo-banner"><span class="analytics-demo-tag">DEMO</span> Ofertas de inversionistas institucionales ilustrativas — con inversionistas reales registrados, esto se llena solo.</div>' +
+    '<div class="analytics-kpis">' +
+      '<div class="analytics-kpi"><div class="analytics-kpi-value">' + checked.length + '</div><div class="analytics-kpi-label">Propiedades en el paquete</div></div>' +
+      '<div class="analytics-kpi"><div class="analytics-kpi-value">' + money(totalValor) + '</div><div class="analytics-kpi-label">Valor de lista combinado</div></div>' +
+      '<div class="analytics-kpi"><div class="analytics-kpi-value">' + money(capitalLiberado) + '</div><div class="analytics-kpi-label">Capital regulatorio que liberás de inmediato</div></div>' +
+    '</div>' +
+    '<div class="analytics-market">' +
+      '<div class="analytics-market-title">Simulador: vender en bloque ahora vs. esperar venta individual</div>' +
+      '<div style="display:flex; align-items:center; gap:8px; margin:6px 0;">' +
+        '<label style="font-size:.78rem;">Descuento de bloque</label>' +
+        '<select id="bulkDescuentoSelect" class="filter-select" style="width:auto;">' +
+          [10,15,20,25,30].map(d => '<option value="' + d + '"' + (d===descuento?' selected':'') + '>' + d + '%</option>').join('') +
+        '</select>' +
+      '</div>' +
+      '<div class="analytics-market-detail">Vendiendo el paquete ahora con ' + descuento + '% de descuento: <b>' + money(precioBloque) + '</b> de ingreso inmediato, y liberás los ' + money(capitalLiberado) + ' de capital regulatorio atado ya mismo. Esperando y vendiendo de a una, ese capital sigue atado mientras tanto — y sube de categoría de provisión cuanto más tiempo pase (ver "Capital regulatorio" arriba).</div>' +
+    '</div>' +
+    '<div class="analytics-top">' +
+      '<div class="analytics-top-title">Ofertas de inversionistas institucionales <span class="analytics-demo-tag-sm">demo</span></div>' +
+      ofertas.map(o =>
+        '<div class="analytics-top-row">' +
+          '<div class="analytics-top-name">' + o.nombre + '</div>' +
+          '<div class="analytics-top-bar-wrap"><div class="analytics-top-bar" style="width:' + o.pct + '%"></div></div>' +
+          '<div class="analytics-top-nums">' + o.pct + '% del valor · cierre en ' + o.dias + ' días</div>' +
+        '</div>'
+      ).join('') +
+    '</div>';
+
+  const descSel = document.getElementById('bulkDescuentoSelect');
+  if(descSel) descSel.addEventListener('change', updateBancoBulkSummary);
+}
+
 document.getElementById('bancoAddBtn').addEventListener('click', () => {
   const form = document.getElementById('bancoAddForm');
   form.style.display = form.style.display === 'none' ? 'block' : 'none';
@@ -3941,6 +4157,7 @@ let searchStarted = false;
 function renderList(){
   updateMap(); // el mapa se mantiene al día con los filtros aunque el listado espere al botón "Buscar"
   if(!searchStarted) return; // esperar a que el comprador toque "Buscar propiedades"
+  document.getElementById('listViewToggle').style.display = currentUser ? 'flex' : 'none';
   const arr = getFiltered();
   const lockedCount = arr.filter(d => d._locked).length;
   document.getElementById('resultCount').innerHTML =
@@ -3949,7 +4166,10 @@ function renderList(){
   const list = document.getElementById('list');
   list.innerHTML = '';
   if(arr.length===0){
-    list.innerHTML = '<div class="empty">No hay propiedades para este filtro.</div>';
+    const emptyMsg = listViewMode === 'favoritos' ? 'Todavía no marcaste ninguna propiedad como favorita — tocá el ♡ en una tarjeta.'
+      : listViewMode === 'recientes' ? 'Todavía no viste ninguna propiedad en esta sesión.'
+      : 'No hay propiedades para este filtro.';
+    list.innerHTML = '<div class="empty">' + emptyMsg + '</div>';
     return;
   }
   arr.forEach(p => {
@@ -4070,13 +4290,17 @@ function renderList(){
         '</div></div>';
 
       // Teaser visible sin login (spec sección 10.1 del README): banco, nombre, precio, zona, tipo básico.
+      const isFav = currentUser && getFavoritos().includes(p._id);
       const basicHtml =
         '<div class="card-top">' +
           '<div>' +
             '<div class="card-bank" style="color:' + colorFor(p.banco) + '">' + p.banco + '</div>' +
             '<div class="card-name">' + p.nombre + '</div>' +
           '</div>' +
-          '<div class="card-price">' + money(p.precio) + '</div>' +
+          '<div style="display:flex; align-items:center; gap:6px;">' +
+            '<button type="button" class="fav-btn' + (isFav ? ' active' : '') + '" title="Guardar en favoritos">' + (isFav ? '♥' : '♡') + '</button>' +
+            '<div class="card-price">' + money(p.precio) + '</div>' +
+          '</div>' +
         '</div>' +
         '<div class="card-zone">' + p.zona + '</div>' +
         '<div class="card-meta">' + metaHtml + '</div>';
@@ -4118,10 +4342,20 @@ function renderList(){
           openLoanSimulator(parseFloat(simButtonEl.dataset.simPrice), simButtonEl.dataset.simName);
         });
       }
+      const favBtnEl = card.querySelector('.fav-btn');
+      if(favBtnEl){
+        favBtnEl.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if(!currentUser){ openAuthModal('comprador'); return; }
+          toggleFavorito(p._id);
+          renderList(); // re-render simple: mantiene el ♡/♥ en sync y refresca la vista "Favoritos" si está activa
+        });
+      }
     }
 
     card.addEventListener('click', (e) => {
       if(e.target.tagName !== 'A'){
+        trackHistorial(p._id);
         highlightCard(p._id);
       }
     });
@@ -4284,6 +4518,13 @@ renderEstiloChips();
 renderAmenidadesChips();
 updateDealCount();
 dealSelect.addEventListener('change', updateDealCount);
+document.querySelectorAll('.list-view-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    listViewMode = btn.dataset.view;
+    document.querySelectorAll('.list-view-btn').forEach(b => b.classList.toggle('active', b === btn));
+    renderList();
+  });
+});
 ['zonaTextInput','priceMinInput','priceMaxInput','areaMinInput','areaMaxInput'].forEach(id => {
   document.getElementById(id).addEventListener('input', renderList);
 });
