@@ -2041,6 +2041,7 @@
 <div class="content-tabs" id="contentTabs">
   <button type="button" class="content-tab active" data-tab="mapa">Mapa</button>
   <button type="button" class="content-tab" data-tab="proveedores">Proveedores</button>
+  <button type="button" class="content-tab" data-tab="inversion">Asesor de inversión</button>
 </div>
 
 <div id="mapaTabPane" class="mapa-tab-pane">
@@ -2252,6 +2253,30 @@
 
 <div id="proveedoresTabPane" style="display:none; padding:16px;">
   <div id="buyerProviderDirectory"></div>
+</div>
+
+<div id="inversionTabPane" style="display:none; padding:16px; max-width:920px;">
+  <h3 style="margin:0 0 4px; font-family:var(--font-serif); color:var(--ink);">Asesor de inversión</h3>
+  <p class="map-caption" style="padding:0 0 14px;">Ingresá tu presupuesto y objetivo — te mostramos las mejores zonas y propiedades de nuestro propio inventario de reposeídos según ese objetivo, usando datos reales del listado (precio, % vs. mercado, tiempo publicado). Donde no hay datos suficientes en este listado (rentabilidad de alquiler, tendencia de plusvalía) usamos un estimado ilustrativo, siempre marcado como tal — nunca una promesa.</p>
+  <div class="numfilter-grid" style="margin-bottom:10px;">
+    <div><label>Presupuesto mínimo ($)</label><input type="number" id="investBudgetMin" placeholder="0" min="0"></div>
+    <div><label>Presupuesto máximo ($)</label><input type="number" id="investBudgetMax" placeholder="Ej. 300000" min="0"></div>
+    <div>
+      <label>Objetivo</label>
+      <select class="filter-select" id="investObjetivo">
+        <option value="reventa">Reventa (comprar barato, vender más caro)</option>
+        <option value="alquiler">Alquiler (ingreso mensual)</option>
+        <option value="plusvalia">Plusvalía (crecimiento a largo plazo)</option>
+        <option value="rapida">Oportunidad rápida</option>
+      </select>
+    </div>
+    <div>
+      <label>Zona preferida (opcional)</label>
+      <select class="filter-select" id="investZona"><option value="">Cualquier zona</option></select>
+    </div>
+  </div>
+  <button type="button" class="afford-calc-btn" id="investCalcBtn">Buscar oportunidades</button>
+  <div id="investResults" style="margin-top:18px;"></div>
 </div>
 </main>
 </div>
@@ -3691,14 +3716,16 @@ function renderProviderDirectory(containerId, activeCats, context){
   });
 }
 
-// -- Pestañas Mapa / Proveedores en el lado comprador --
+// -- Pestañas Mapa / Proveedores / Asesor de inversión en el lado comprador --
 document.querySelectorAll('.content-tab').forEach(tab => {
   tab.addEventListener('click', () => {
     document.querySelectorAll('.content-tab').forEach(t => t.classList.toggle('active', t === tab));
-    const isMapa = tab.dataset.tab === 'mapa';
-    document.getElementById('mapaTabPane').style.display = isMapa ? '' : 'none';
-    document.getElementById('proveedoresTabPane').style.display = isMapa ? 'none' : '';
-    if(!isMapa) renderProviderDirectory('buyerProviderDirectory');
+    const which = tab.dataset.tab;
+    document.getElementById('mapaTabPane').style.display = which === 'mapa' ? '' : 'none';
+    document.getElementById('proveedoresTabPane').style.display = which === 'proveedores' ? '' : 'none';
+    document.getElementById('inversionTabPane').style.display = which === 'inversion' ? '' : 'none';
+    if(which === 'proveedores') renderProviderDirectory('buyerProviderDirectory');
+    if(which === 'inversion') initInvestmentAdvisor();
   });
 });
 
@@ -4101,6 +4128,151 @@ function renderList(){
 
     list.appendChild(card);
   });
+}
+
+// -- Asesor de inversión (spec: Módulo Comprador, sección G "Motor de Inteligencia de Inversión") --
+// Reutiliza datos reales ya calculados por propiedad (precio, pct_vs_mercado, mercado_categoria,
+// dias_publicado) — no llama ningún backend de IA (no hay backend). Para "alquiler" y "plusvalía"
+// no existe dato real de renta ni de histórico de precio en el listado scrapeado de los bancos, así
+// que se usa un estimado ilustrativo (mismo patrón `stableFakeNumber` que ya usa el dashboard DEMO
+// del banco), siempre marcado como tal — nunca presentado como una promesa de rentabilidad.
+let investAdvisorInited = false;
+function initInvestmentAdvisor(){
+  if(investAdvisorInited) return;
+  investAdvisorInited = true;
+  const zonaSelect = document.getElementById('investZona');
+  zonas.forEach(z => {
+    const opt = document.createElement('option');
+    opt.value = z; opt.textContent = z;
+    zonaSelect.appendChild(opt);
+  });
+  document.getElementById('investCalcBtn').addEventListener('click', renderInvestmentResults);
+}
+
+function confianzaFor(d){
+  if(d.mercado_categoria === 'extreme' || d.pct_vs_mercado === null) return 'baja';
+  if(d.mercado_categoria === 'below' && d.pct_vs_mercado <= -15) return 'alta';
+  return 'media';
+}
+const CONFIANZA_TAG_CLASS = { alta: 'tag-below', media: 'tag-inline', baja: 'tag-extreme' };
+const CONFIANZA_LABEL = { alta: 'Confianza alta', media: 'Confianza media', baja: 'Requiere verificación' };
+// Zonas con desarrollo/demanda conocida en Panamá (referencia pública general, no dato propietario)
+// — usado solo como estimado ilustrativo para el objetivo "plusvalía", ya que el listado no trae
+// histórico de precio por zona.
+const PLUSVALIA_ZONAS_DEMANDA = /coronado|gorgona|panamá pacífico|panama pacifico|casco viejo|san carlos|bocas del toro|boquete/i;
+
+function demoRentalYield(d){
+  // Estimado ilustrativo determinístico (misma familia de hash que stableFakeNumber) — no hay
+  // dato real de renta en el listado bancario. Rango realista para Panamá: ~4.5%–8% anual bruto.
+  return stableFakeNumber(d.nombre + d.zona + 'yield', 45, 80) / 10;
+}
+
+function scoreForObjetivo(d, objetivo){
+  const conf = confianzaFor(d);
+  const confMult = conf === 'alta' ? 1.2 : conf === 'media' ? 1 : 0.5;
+  const descuento = d.pct_vs_mercado !== null ? Math.max(0, -d.pct_vs_mercado) : 0;
+  if(objetivo === 'reventa'){
+    return descuento * confMult;
+  }
+  if(objetivo === 'rapida'){
+    // "Oportunidad rápida" exige confianza real en el comparable, no solo descuento
+    if(conf === 'baja') return -1;
+    return descuento * confMult;
+  }
+  if(objetivo === 'alquiler'){
+    return demoRentalYield(d) * confMult;
+  }
+  if(objetivo === 'plusvalia'){
+    const zonaBonus = PLUSVALIA_ZONAS_DEMANDA.test(d.zona) ? 1.5 : 1;
+    return confMult * zonaBonus;
+  }
+  return descuento;
+}
+
+function porQueChips(d, objetivo){
+  const chips = [];
+  const conf = confianzaFor(d);
+  chips.push('<span class="tag ' + CONFIANZA_TAG_CLASS[conf] + '">' + CONFIANZA_LABEL[conf] + '</span>');
+  if(d.pct_vs_mercado !== null && d.mercado_categoria !== 'extreme'){
+    chips.push('<span class="tag ' + (d.pct_vs_mercado < 0 ? 'tag-below' : 'tag-above') + '">' + (d.pct_vs_mercado < 0 ? Math.abs(d.pct_vs_mercado).toFixed(0) + '% bajo mercado' : d.pct_vs_mercado.toFixed(0) + '% sobre mercado') + '</span>');
+  }
+  if(d.tiempo_publicado){
+    chips.push('<span class="tag tag-time">⏱ ' + d.tiempo_publicado + '</span>');
+  }
+  if(objetivo === 'alquiler'){
+    chips.push('<span class="tag tag-inline">~' + demoRentalYield(d).toFixed(1) + '% renta anual <span class="analytics-demo-tag-sm">estimado</span></span>');
+  }
+  if(objetivo === 'plusvalia'){
+    chips.push('<span class="tag tag-inline">' + (PLUSVALIA_ZONAS_DEMANDA.test(d.zona) ? 'Zona de demanda conocida' : 'Sin catalizador identificado') + ' <span class="analytics-demo-tag-sm">estimado</span></span>');
+  }
+  return chips.join('');
+}
+
+function renderInvestmentResults(){
+  const min = parseFloat(document.getElementById('investBudgetMin').value) || 0;
+  const max = parseFloat(document.getElementById('investBudgetMax').value) || Infinity;
+  const objetivo = document.getElementById('investObjetivo').value;
+  const zonaPref = document.getElementById('investZona').value;
+  const box = document.getElementById('investResults');
+
+  let candidatos = DATA.filter(d => d.categoria_venta === 'Reposeído bancario' && d.precio !== null && d.precio >= min && d.precio <= max);
+  if(zonaPref) candidatos = candidatos.filter(d => d._zona === zonaPref);
+
+  if(candidatos.length === 0){
+    box.innerHTML = '<div class="analytics-empty-note">No hay propiedades de nuestro inventario en ese rango de presupuesto' + (zonaPref ? ' y zona' : '') + '. Probá ampliando el presupuesto.</div>';
+    return;
+  }
+
+  candidatos.forEach(d => { d._investScore = scoreForObjetivo(d, objetivo); });
+  const ranked = candidatos.filter(d => d._investScore >= 0).sort((a,b) => b._investScore - a._investScore);
+  const top = ranked.slice(0, 8);
+
+  // Mejores zonas: agrupa los candidatos (antes del corte a 8) por zona.
+  const porZona = {};
+  ranked.forEach(d => {
+    if(!porZona[d._zona]) porZona[d._zona] = [];
+    porZona[d._zona].push(d);
+  });
+  const zonasRanking = Object.keys(porZona).map(z => {
+    const arr = porZona[z];
+    const avgScore = arr.reduce((s,d) => s + d._investScore, 0) / arr.length;
+    return { zona: z, count: arr.length, avgScore };
+  }).sort((a,b) => b.avgScore - a.avgScore).slice(0, 5);
+  const maxZonaScore = Math.max(1, ...zonasRanking.map(z => z.avgScore));
+
+  let html = '<div class="analytics-demo-banner"><span class="analytics-demo-tag">DEMO</span> Ranking calculado con los datos reales del listado (precio, % vs. mercado, tiempo publicado). Donde no hay dato real (renta, tendencia de precio) usamos un estimado ilustrativo, marcado en cada tarjeta — nunca una garantía de rentabilidad.</div>';
+
+  html += '<div class="analytics-top"><div class="analytics-top-title">Mejores zonas para tu objetivo</div>';
+  zonasRanking.forEach(z => {
+    html += '<div class="analytics-top-row">' +
+      '<div class="analytics-top-name">' + z.zona + '</div>' +
+      '<div class="analytics-top-bar-wrap"><div class="analytics-top-bar" style="width:' + Math.round(100*z.avgScore/maxZonaScore) + '%"></div></div>' +
+      '<div class="analytics-top-nums">' + z.count + ' oportunidad' + (z.count===1?'':'es') + '</div>' +
+      '</div>';
+  });
+  html += '</div>';
+
+  html += '<div class="analytics-top-title" style="margin:16px 0 10px;">Mejores propiedades para tu objetivo</div>';
+  html += '<div style="display:flex; flex-direction:column; gap:10px;">';
+  top.forEach(d => {
+    html += '<div class="banco-item">' +
+      '<div class="banco-item-top" style="justify-content:space-between; align-items:flex-start;">' +
+        '<div>' +
+          '<div style="font-weight:700; color:var(--ink);">' + d.nombre + '</div>' +
+          '<div style="font-size:.78rem; color:var(--ink-soft);">' + d.banco + ' · ' + d.zona + '</div>' +
+        '</div>' +
+        '<div style="font-weight:800; color:var(--ocean); white-space:nowrap;">' + money(d.precio) + '</div>' +
+      '</div>' +
+      '<div class="card-tags" style="margin-top:8px;">' + porQueChips(d, objetivo) + '</div>' +
+      '</div>';
+  });
+  html += '</div>';
+
+  if(top.length === 0){
+    html += '<div class="analytics-empty-note">Ninguna propiedad en ese presupuesto tiene suficiente confianza en el comparable para este objetivo — probá "Reventa" o ampliá el presupuesto.</div>';
+  }
+
+  box.innerHTML = html;
 }
 
 renderChips();
