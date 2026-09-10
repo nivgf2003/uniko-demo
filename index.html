@@ -2315,7 +2315,19 @@
   <div class="map-section-sub" id="bancoWelcome" style="margin-bottom:14px;"></div>
   <div id="bancoAnalytics"></div>
   <div id="bancoCapital" style="margin-bottom:14px;"></div>
-  <button type="button" class="auth-btn" id="bancoAddBtn" style="margin-bottom:14px;">+ Agregar propiedad</button>
+  <div id="bancoBenchmark" style="margin-bottom:14px;"></div>
+  <div style="display:flex; gap:10px; margin-bottom:14px; flex-wrap:wrap;">
+    <button type="button" class="auth-btn" id="bancoAddBtn">+ Agregar propiedad</button>
+    <button type="button" class="auth-btn" id="bancoImportBtn" style="background:var(--ocean-deep);">📥 Importar desde Excel/CSV</button>
+  </div>
+  <div id="bancoImportPanel" class="banco-form" style="display:none; max-width:100%;">
+    <div class="sim-row"><label>Pegá filas separadas por coma o tab (primera fila = encabezados), o subí un archivo .csv</label>
+      <textarea id="bancoImportText" rows="5" style="width:100%; font-family:monospace; font-size:.75rem;" placeholder="nombre,zona,tipo,precio,area,hab,banos&#10;Apto 5C Perla Mar,San Carlos,Apartamento,125000,88,1,1"></textarea>
+    </div>
+    <div class="sim-row"><input type="file" id="bancoImportFile" accept=".csv,.txt,text/csv,text/plain"></div>
+    <button type="button" class="sim-calc-btn" id="bancoImportProcessBtn">Procesar archivo</button>
+    <div id="bancoImportResults" style="margin-top:12px;"></div>
+  </div>
   <div id="bancoAddForm" class="banco-form" style="display:none;">
     <div class="banco-form-grid">
       <div class="sim-row"><label>Nombre / referencia</label><input type="text" id="bancoFormNombre" placeholder="Ej. Apto 5C, P.H. Perla Mar"></div>
@@ -3628,12 +3640,50 @@ function renderBancoCapital(inv){
   });
 }
 
+// -- Inteligencia de mercado: benchmarking anónimo entre bancos (spec Módulo Banco, sección J / A5) --
+// Modelo tipo buró de crédito: mientras más bancos se conecten, mejor el dato para todos. Hoy solo
+// hay un banco conectado a la vez (localStorage por sesión, no hay red real de bancos) así que
+// "resto del sistema" es necesariamente ilustrativo — nunca inventamos un banco competidor real.
+function renderBancoBenchmark(inv){
+  const box = document.getElementById('bancoBenchmark');
+  if(!box) return;
+  const seed = (currentUser.email || currentUser.name || 'banco');
+  const metrics = [
+    { label: 'Días promedio en mercado', tu: stableFakeNumber(seed+'m1', 40, 95), sistema: 68, suffix: ' días', lowerBetter: true },
+    { label: '% de descuento promedio ofrecido', tu: stableFakeNumber(seed+'m2', 8, 35), sistema: 19, suffix: '%', lowerBetter: false },
+    { label: 'Rotación de cartera (ventas / 12 meses)', tu: stableFakeNumber(seed+'m3', 15, 60), sistema: 38, suffix: '%', lowerBetter: false },
+  ];
+  const rowsHtml = metrics.map(m => {
+    const max = Math.max(m.tu, m.sistema, 1);
+    const mejor = m.lowerBetter ? m.tu <= m.sistema : m.tu >= m.sistema;
+    return '<div style="margin-bottom:14px;">' +
+      '<div style="font-size:.8rem; font-weight:700; color:var(--ink); margin-bottom:6px;">' + m.label +
+        (mejor ? ' <span class="tag tag-below">Mejor que el sistema</span>' : ' <span class="tag tag-inline">Por debajo del sistema</span>') +
+      '</div>' +
+      '<div class="analytics-top-row">' +
+        '<div class="analytics-top-name">Tu banco</div>' +
+        '<div class="analytics-top-bar-wrap"><div class="analytics-top-bar" style="width:' + Math.round(100*m.tu/max) + '%"></div></div>' +
+        '<div class="analytics-top-nums">' + m.tu + m.suffix + '</div>' +
+      '</div>' +
+      '<div class="analytics-top-row">' +
+        '<div class="analytics-top-name">Resto del sistema</div>' +
+        '<div class="analytics-top-bar-wrap"><div class="analytics-top-bar" style="width:' + Math.round(100*m.sistema/max) + '%; opacity:.5;"></div></div>' +
+        '<div class="analytics-top-nums">' + m.sistema + m.suffix + '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+  box.innerHTML =
+    '<div class="analytics-demo-banner"><span class="analytics-demo-tag">DEMO</span> Comparación ilustrativa — hoy solo tu banco está conectado a la demo. Con más bancos reales en la plataforma, "resto del sistema" se calcula solo, siempre anónimo (nunca se identifica a un banco competidor específico).</div>' +
+    '<div class="analytics-top"><div class="analytics-top-title">Cómo te comparás con el resto del sistema</div>' + rowsHtml + '</div>';
+}
+
 function renderBancoPanel(){
   document.getElementById('bancoWelcome').textContent = 'Bienvenido, ' + currentUser.name + '. Aquí carga tu banco el inventario que verán los compradores.';
   renderProviderDirectory('bancoDirectory', null, 'banco');
   const inv = getBancoInventory();
   renderBancoAnalytics(inv);
   renderBancoCapital(inv);
+  renderBancoBenchmark(inv);
   const listEl = document.getElementById('bancoInventoryList');
   if(inv.length === 0){
     listEl.innerHTML = '<div class="empty">Aún no has agregado ninguna propiedad. Toca "+ Agregar propiedad" para cargar la primera.</div>';
@@ -3756,6 +3806,131 @@ function updateBancoBulkSummary(){
 document.getElementById('bancoAddBtn').addEventListener('click', () => {
   const form = document.getElementById('bancoAddForm');
   form.style.display = form.style.display === 'none' ? 'block' : 'none';
+});
+
+// -- Carga inteligente de inventario (spec Módulo Banco, sección B) --
+// Real, no una simulación de IA con un timer falso: parsea CSV/TSV de verdad y mapea encabezados
+// por sinónimo ("valor de venta"/"precio de salida"/"precio publicado" -> precio), tal como pide
+// el documento. Nunca publica directo — siempre pasa por la vista de validación verde/amarillo/rojo
+// antes de tocar el inventario real.
+document.getElementById('bancoImportBtn').addEventListener('click', () => {
+  const panel = document.getElementById('bancoImportPanel');
+  panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+});
+document.getElementById('bancoImportFile').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = () => { document.getElementById('bancoImportText').value = reader.result; };
+  reader.readAsText(file);
+});
+
+const IMPORT_FIELD_SYNONYMS = {
+  nombre: ['nombre','propiedad','referencia','titulo','título','descripcion','descripción'],
+  zona: ['zona','ubicacion','ubicación','sector','corregimiento','distrito'],
+  tipo: ['tipo','categoria','categoría'],
+  precio: ['precio','valor de venta','precio de salida','precio publicado','valor','monto'],
+  area: ['area','área','m2','m²','metraje','superficie'],
+  hab: ['hab','habitaciones','recamaras','recámaras','cuartos','dormitorios'],
+  banos: ['banos','baños','bathrooms'],
+  estado: ['estado','disponibilidad','status'],
+};
+function matchImportField(header){
+  const h = header.toLowerCase().trim();
+  for(const [field, syns] of Object.entries(IMPORT_FIELD_SYNONYMS)){
+    if(syns.some(s => h === s || h.includes(s))) return field;
+  }
+  return null;
+}
+function parseImportText(text){
+  const lines = text.trim().split(/\r?\n/).filter(l => l.trim());
+  if(lines.length < 2) return { mapping: [], headerCells: [], rows: [] };
+  const delim = lines[0].includes('\t') ? '\t' : ',';
+  const headerCells = lines[0].split(delim).map(h => h.trim());
+  const mapping = headerCells.map(matchImportField);
+  const rows = lines.slice(1).map(line => {
+    const cells = line.split(delim).map(c => c.trim());
+    const draft = {};
+    mapping.forEach((field, i) => { if(field) draft[field] = cells[i] || ''; });
+    return draft;
+  });
+  return { mapping, headerCells, rows };
+}
+function classifyImportRow(draft){
+  const fields = {};
+  ['nombre','zona','precio'].forEach(f => { fields[f] = draft[f] ? 'verde' : 'rojo'; });
+  ['tipo','area','hab','banos','estado'].forEach(f => {
+    const v = draft[f];
+    if(!v) fields[f] = null;
+    else if((f==='area'||f==='hab'||f==='banos') && isNaN(parseFloat(v))) fields[f] = 'amarillo';
+    else fields[f] = 'verde';
+  });
+  if(draft.precio && isNaN(parseFloat(draft.precio))) fields.precio = 'amarillo';
+  const vals = Object.values(fields).filter(Boolean);
+  const overall = vals.includes('rojo') ? 'rojo' : vals.includes('amarillo') ? 'amarillo' : 'verde';
+  return { fields, overall };
+}
+const CONF_TAG_CLASS = { verde: 'tag-below', amarillo: 'tag-inline', rojo: 'tag-extreme' };
+const CONF_LABEL = { verde: 'Alta confianza', amarillo: 'Requiere confirmación', rojo: 'Falta campo esencial' };
+let bancoImportDrafts = [];
+document.getElementById('bancoImportProcessBtn').addEventListener('click', () => {
+  const text = document.getElementById('bancoImportText').value;
+  const { mapping, headerCells, rows } = parseImportText(text);
+  const box = document.getElementById('bancoImportResults');
+  const unmapped = headerCells.filter((h,i) => !mapping[i]);
+  if(rows.length === 0){
+    box.innerHTML = '<div class="analytics-empty-note">No se detectaron filas de datos — revisá que la primera línea sea el encabezado.</div>';
+    bancoImportDrafts = [];
+    return;
+  }
+  bancoImportDrafts = rows.map(draft => ({ draft, ...classifyImportRow(draft) }));
+  const summary = { verde: 0, amarillo: 0, rojo: 0 };
+  bancoImportDrafts.forEach(r => summary[r.overall]++);
+  const rowsHtml = bancoImportDrafts.map((r, i) => {
+    const d = r.draft;
+    return '<div class="banco-item" style="margin-bottom:8px;">' +
+      '<div class="banco-item-top">' +
+        '<input type="checkbox" class="import-row-check" data-idx="' + i + '"' + (r.overall !== 'rojo' ? ' checked' : '') + '>' +
+        '<div class="banco-item-body">' +
+          '<div class="banco-item-name">' + (d.nombre || '(sin nombre)') + '</div>' +
+          '<div class="banco-item-meta">' + (d.zona||'—') + ' · ' + (d.tipo||'—') + ' · ' + (d.precio ? money(parseFloat(d.precio)||0) : 'sin precio') + '</div>' +
+          '<span class="tag ' + CONF_TAG_CLASS[r.overall] + '">' + CONF_LABEL[r.overall] + '</span>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+  box.innerHTML =
+    '<div class="analytics-demo-banner"><span class="analytics-demo-tag">DEMO</span> Mapeo por sinónimo de encabezado (real, no relleno) — todavía no reconoce columnas fuera de este diccionario ni geolocaliza direcciones automáticamente.</div>' +
+    (unmapped.length ? '<div class="analytics-empty-note">Columnas no reconocidas (se ignoran): ' + unmapped.join(', ') + '</div>' : '') +
+    '<div style="font-size:.78rem; color:var(--ink-soft); margin:8px 0;">' + summary.verde + ' con alta confianza · ' + summary.amarillo + ' requieren confirmación · ' + summary.rojo + ' con campo esencial faltante (no seleccionadas)</div>' +
+    rowsHtml +
+    '<button type="button" class="sim-calc-btn" id="bancoImportConfirmBtn" style="margin-top:8px;">Aprobar seleccionadas y agregar a mi cartera</button>';
+  document.getElementById('bancoImportConfirmBtn').addEventListener('click', () => {
+    const checked = Array.from(document.querySelectorAll('.import-row-check:checked')).map(cb => bancoImportDrafts[parseInt(cb.dataset.idx,10)].draft);
+    if(checked.length === 0){ alert('No hay filas seleccionadas.'); return; }
+    const inv = getBancoInventory();
+    checked.forEach(d => {
+      inv.push({
+        nombre: d.nombre || 'Sin nombre',
+        zona: d.zona || 'Sin especificar',
+        tipo: d.tipo || 'Casa',
+        estado: 'Disponible',
+        precio: parseFloat(d.precio) || null,
+        area: parseFloat(d.area) || null,
+        hab: parseInt(d.hab, 10) || null,
+        banos: parseInt(d.banos, 10) || null,
+        estilo: null,
+        fotos: [],
+        lat: null, lon: null,
+      });
+    });
+    saveBancoInventory(inv);
+    document.getElementById('bancoImportPanel').style.display = 'none';
+    document.getElementById('bancoImportText').value = '';
+    document.getElementById('bancoImportResults').innerHTML = '';
+    renderBancoPanel();
+    alert(checked.length + ' propiedad(es) agregada(s) a tu cartera.');
+  });
 });
 
 // Fotos: se leen como data URL y se guardan junto con la propiedad en localStorage.
