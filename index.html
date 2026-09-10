@@ -3546,6 +3546,15 @@ const JOB_STATUS_CLASS = {
   'Evidencia enviada': 'st-evidencia',
   'Pagado': 'st-pagado',
 };
+// Criterios de evaluación del proveedor (spec: Evaluación del proveedor por el banco / Sistema
+// de Reputación Verificada) — la estrella general que ya se muestra es el promedio de estos 5.
+const RATE_CRITERIA = [
+  { key: 'calidad', label: 'Calidad' },
+  { key: 'cumplimiento', label: 'Cumplimiento' },
+  { key: 'puntualidad', label: 'Puntualidad' },
+  { key: 'comunicacion', label: 'Comunicación' },
+  { key: 'documentacion', label: 'Documentación' },
+];
 function renderBancoAnalytics(inv){
   const box = document.getElementById('bancoAnalytics');
   const topList = inv.map(p => ({
@@ -3842,10 +3851,12 @@ function renderBancoJobs(){
         (j.estado === 'Pagado' && !j.calificacion ? '<button type="button" class="job-action-btn job-rate-toggle" data-idx="' + j._idx + '">Calificar</button>' : '') +
         (j.calificacion ? starsHtml(j.calificacion.estrellas) : '') +
       '</div>' +
-      '<div class="banco-item-service-form job-rate-form" data-idx="' + j._idx + '" style="display:none; width:100%;">' +
-        '<select class="job-rate-stars">' + [5,4,3,2,1].map(n => '<option value="' + n + '">' + n + ' estrella' + (n>1?'s':'') + '</option>').join('') + '</select>' +
-        '<input type="text" class="job-rate-comment" placeholder="Comentario (opcional)" style="flex:1; min-width:160px; font-family:inherit; font-size:.8rem; padding:8px; border-radius:8px; border:1px solid var(--line);">' +
-        '<button type="button" class="job-action-btn job-rate-send" data-idx="' + j._idx + '">Enviar calificación</button>' +
+      '<div class="banco-item-service-form job-rate-form" data-idx="' + j._idx + '" style="display:none; width:100%; flex-direction:column; align-items:stretch;">' +
+        '<div class="numfilter-grid" style="margin-bottom:6px;">' +
+          RATE_CRITERIA.map(c => '<div><label style="font-size:.72rem;">' + c.label + '</label><select class="job-rate-criterio" data-criterio="' + c.key + '">' + [5,4,3,2,1].map(n => '<option value="' + n + '"' + (n===5?' selected':'') + '>' + n + '</option>').join('') + '</select></div>').join('') +
+        '</div>' +
+        '<input type="text" class="job-rate-comment" placeholder="Comentario (opcional)" style="font-family:inherit; font-size:.8rem; padding:8px; border-radius:8px; border:1px solid var(--line); margin-bottom:6px;">' +
+        '<button type="button" class="job-action-btn job-rate-send" data-idx="' + j._idx + '" style="align-self:flex-start;">Enviar calificación</button>' +
       '</div>' +
     '</div>';
   }).join('');
@@ -3866,10 +3877,12 @@ function renderBancoJobs(){
   container.querySelectorAll('.job-rate-send').forEach(btn => {
     btn.addEventListener('click', () => {
       const form = btn.closest('.job-rate-form');
-      const estrellas = parseInt(form.querySelector('.job-rate-stars').value, 10);
+      const criterios = {};
+      form.querySelectorAll('.job-rate-criterio').forEach(sel => { criterios[sel.dataset.criterio] = parseInt(sel.value, 10); });
+      const estrellas = Math.round(Object.values(criterios).reduce((s,n) => s+n, 0) / Object.values(criterios).length);
       const comentario = form.querySelector('.job-rate-comment').value.trim();
       const jobs2 = getJobsRegistry();
-      jobs2[parseInt(btn.dataset.idx, 10)].calificacion = { estrellas: estrellas, comentario: comentario, fecha: Date.now() };
+      jobs2[parseInt(btn.dataset.idx, 10)].calificacion = { estrellas: estrellas, criterios: criterios, comentario: comentario, fecha: Date.now() };
       saveJobsRegistry(jobs2);
       renderBancoJobs();
     });
@@ -4568,6 +4581,7 @@ function renderProveedorAnalytics(){
       realRatings.map(j =>
         '<div class="review-row">' +
           '<div class="review-top"><span class="review-name">' + j.bancoNombre + '</span>' + starsHtml(j.calificacion.estrellas) + '</div>' +
+          (j.calificacion.criterios ? '<div class="review-text" style="font-style:normal;">' + RATE_CRITERIA.map(c => c.label + ': ' + j.calificacion.criterios[c.key]).join(' · ') + '</div>' : '') +
           (j.calificacion.comentario ? '<div class="review-text">"' + j.calificacion.comentario + '"</div>' : '') +
         '</div>'
       ).join('') + '</div>' : '') +
