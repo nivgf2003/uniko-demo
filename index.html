@@ -2322,6 +2322,7 @@
   <div id="bancoAnalytics"></div>
   <div id="bancoCapital" style="margin-bottom:14px;"></div>
   <div id="bancoBenchmark" style="margin-bottom:14px;"></div>
+  <div id="bancoDemanda" style="margin-bottom:14px;"></div>
   <div style="margin-bottom:14px;">
     <button type="button" class="job-action-btn" id="bancoAuditReportBtn">📄 Descargar reporte de cartera para auditoría (CSV)</button>
     <div class="map-caption" style="padding:4px 0 0;">Foto del estado actual de tu cartera (precio, antigüedad estimada, capital atado, vistas/contactos demo). El historial de cambios en el tiempo — lo que la SBP llama "esfuerzo de comercialización razonable" — necesita una base de datos real con registro continuo; este demo no lo simula con datos inventados.</div>
@@ -3696,6 +3697,75 @@ function renderBancoBenchmark(inv){
     '<div class="analytics-top"><div class="analytics-top-title">Cómo te comparás con el resto del sistema</div>' + rowsHtml + '</div>';
 }
 
+// -- Inteligencia de Demanda e Inversión (spec Módulo Banco, sección L) --
+// La completitud de ficha es un dato REAL (se calcula de los campos que el banco realmente
+// cargó: precio, área, hab, baños, fotos) — todo lo demás (vistas, favoritos, leads calificados)
+// es un estimado ilustrativo DEMO, mismo patrón que el resto del panel. El simulador de precio
+// reutiliza capitalRegulatorioFor tal cual, en vez de inventar un segundo modelo de capital.
+function renderBancoDemanda(inv){
+  const box = document.getElementById('bancoDemanda');
+  if(!box) return;
+  const tabla = bancoProvisionTable();
+  const activos = inv.filter(p => (p.estado || 'Disponible') === 'Disponible');
+  if(activos.length === 0){
+    box.innerHTML = '<div class="analytics-empty-note">Agregá propiedades disponibles para ver el ranking de demanda.</div>';
+    return;
+  }
+  const items = activos.map(p => {
+    const camposCompletos = ['precio','area','hab','banos'].filter(k => p[k] !== null && p[k] !== undefined && p[k] !== '').length;
+    const fotos = (p.fotos || []).length;
+    const completitud = Math.round((camposCompletos / 4) * 70 + Math.min(fotos, 3) / 3 * 30);
+    const vistas = stableFakeNumber(p.nombre + p.zona + 'dv', 5, 120);
+    const favoritos = stableFakeNumber(p.nombre + p.zona + 'df', 0, 15);
+    const leads = stableFakeNumber(p.nombre + p.zona + 'dl', 0, 6);
+    const conversionScore = Math.round(completitud * 0.4 + Math.min(vistas, 100) * 0.3 + favoritos * 2 + leads * 5);
+    return { p: p, completitud: completitud, vistas: vistas, favoritos: favoritos, leads: leads, conversionScore: conversionScore, cap: capitalRegulatorioFor(p, tabla) };
+  });
+  const ranked = items.slice().sort((a,b) => b.conversionScore - a.conversionScore).slice(0, 6);
+  const maxScore = Math.max(1, ...ranked.map(i => i.conversionScore));
+  const incompletas = items.filter(i => i.completitud < 60);
+
+  let html = '<div class="analytics-demo-banner"><span class="analytics-demo-tag">DEMO</span> La completitud de ficha es real (según los campos que cargaste). Vistas, favoritos y leads calificados son estimados ilustrativos — con actividad real de compradores, esto se calcula solo.</div>';
+
+  html += '<div class="analytics-top"><div class="analytics-top-title">Ranking de probabilidad de conversión</div>';
+  ranked.forEach(i => {
+    html += '<div class="analytics-top-row">' +
+      '<div class="analytics-top-name">' + i.p.nombre + '</div>' +
+      '<div class="analytics-top-bar-wrap"><div class="analytics-top-bar" style="width:' + Math.round(100 * i.conversionScore / maxScore) + '%"></div></div>' +
+      '<div class="analytics-top-nums">' + i.completitud + '% ficha · ' + i.vistas + ' vistas · ' + i.leads + ' leads</div>' +
+    '</div>';
+  });
+  html += '</div>';
+
+  if(incompletas.length){
+    html += '<div class="analytics-market"><div class="analytics-market-title">⚠️ Fichas incompletas <span class="analytics-demo-tag-sm" style="background:var(--gold-soft); color:var(--green);">dato real</span></div>' +
+      '<div class="analytics-market-detail">' + incompletas.length + ' propiedad' + (incompletas.length===1?'':'es') + ' con menos del 60% de la ficha completa — esto reduce su probabilidad real de conversión, no es un estimado. Completá precio, área, habitaciones/baños y al menos 3 fotos.</div></div>';
+  }
+
+  if(ranked.length){
+    html += '<div class="analytics-market"><div class="analytics-market-title">Simulador de reducción de precio — ' + ranked[0].p.nombre + '</div>' +
+      '<div style="display:flex; align-items:center; gap:8px; margin:6px 0;"><label style="font-size:.78rem;">Descuento</label>' +
+      '<select id="demandaDescuentoSelect" class="filter-select" style="width:auto;">' + [0,5,10,15,20].map(d => '<option value="' + d + '">' + d + '%</option>').join('') + '</select></div>' +
+      '<div class="analytics-market-detail" id="demandaSimResult"></div></div>';
+  }
+
+  box.innerHTML = html;
+
+  if(ranked.length){
+    const top = ranked[0];
+    const updateSim = () => {
+      const d = parseInt(document.getElementById('demandaDescuentoSelect').value, 10);
+      const nuevoPrecio = (top.p.precio || 0) * (1 - d / 100);
+      const demandaBoost = Math.round(d * 2.2); // DEMO: cada 1% de descuento ~2.2% más de interés estimado
+      document.getElementById('demandaSimResult').innerHTML =
+        'Precio actual: <b>' + money(top.p.precio) + '</b>' + (d > 0 ? ' → con ' + d + '% de descuento: <b>' + money(nuevoPrecio) + '</b>. Estimado ilustrativo: +' + demandaBoost + '% de interés esperado.' : '.') +
+        ' Capital regulatorio que se libera si se vende (no cambia con el precio, cambia con el tiempo en cartera): <b>' + money(top.cap.capital) + '</b>.';
+    };
+    document.getElementById('demandaDescuentoSelect').addEventListener('change', updateSim);
+    updateSim();
+  }
+}
+
 // -- Reporte de cartera para auditoría/SBP (spec Módulo Banco, sección D/E) --
 // Es una foto real del estado actual de la cartera (nada inventado en las columnas de precio/zona/
 // tipo/estado — vienen del inventario real del banco). Lo único ilustrativo es antigüedad y
@@ -3813,6 +3883,7 @@ function renderBancoPanel(){
   renderBancoAnalytics(inv);
   renderBancoCapital(inv);
   renderBancoBenchmark(inv);
+  renderBancoDemanda(inv);
   renderBancoJobs();
   const listEl = document.getElementById('bancoInventoryList');
   if(inv.length === 0){
