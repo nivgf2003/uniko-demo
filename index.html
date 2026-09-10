@@ -2316,6 +2316,10 @@
   <div id="bancoAnalytics"></div>
   <div id="bancoCapital" style="margin-bottom:14px;"></div>
   <div id="bancoBenchmark" style="margin-bottom:14px;"></div>
+  <div style="margin-bottom:14px;">
+    <button type="button" class="job-action-btn" id="bancoAuditReportBtn">📄 Descargar reporte de cartera para auditoría (CSV)</button>
+    <div class="map-caption" style="padding:4px 0 0;">Foto del estado actual de tu cartera (precio, antigüedad estimada, capital atado, vistas/contactos demo). El historial de cambios en el tiempo — lo que la SBP llama "esfuerzo de comercialización razonable" — necesita una base de datos real con registro continuo; este demo no lo simula con datos inventados.</div>
+  </div>
   <div style="display:flex; gap:10px; margin-bottom:14px; flex-wrap:wrap;">
     <button type="button" class="auth-btn" id="bancoAddBtn">+ Agregar propiedad</button>
     <button type="button" class="auth-btn" id="bancoImportBtn" style="background:var(--ocean-deep);">📥 Importar desde Excel/CSV</button>
@@ -3669,6 +3673,51 @@ function renderBancoBenchmark(inv){
     '<div class="analytics-demo-banner"><span class="analytics-demo-tag">DEMO</span> Comparación ilustrativa — hoy solo tu banco está conectado a la demo. Con más bancos reales en la plataforma, "resto del sistema" se calcula solo, siempre anónimo (nunca se identifica a un banco competidor específico).</div>' +
     '<div class="analytics-top"><div class="analytics-top-title">Cómo te comparás con el resto del sistema</div>' + rowsHtml + '</div>';
 }
+
+// -- Reporte de cartera para auditoría/SBP (spec Módulo Banco, sección D/E) --
+// Es una foto real del estado actual de la cartera (nada inventado en las columnas de precio/zona/
+// tipo/estado — vienen del inventario real del banco). Lo único ilustrativo es antigüedad y
+// vistas/contactos (mismo estimado DEMO que ya se ve en el resto del panel). No fabrica un
+// historial de cambios de precio ni de leads en el tiempo — eso requiere una base de datos real
+// con registro continuo, y decirlo explícitamente en el reporte es mejor que simularlo con datos
+// inventados que un auditor real podría tomar como verdaderos.
+function generateAuditoriaReport(inv){
+  const tabla = bancoProvisionTable();
+  const activos = inv.filter(p => (p.estado || 'Disponible') !== 'Retirado');
+  const lines = [
+    'UniKo -- Reporte de cartera para auditoria interna / SBP (DEMO)',
+    'Banco: ' + (currentUser.name || ''),
+    'Generado: ' + new Date().toLocaleString('es-PA'),
+    '',
+    'Nombre,Zona,Tipo,Estado,Precio,Antiguedad estimada (meses),% Provision aplicado,Capital regulatorio atado,Vistas (demo),Contactos (demo)',
+  ];
+  activos.forEach(p => {
+    const cap = capitalRegulatorioFor(p, tabla);
+    const vistas = stableFakeNumber(p.nombre + 'v', 8, 140);
+    const contactos = stableFakeNumber(p.nombre + 'c', 0, 12);
+    lines.push([
+      '"' + (p.nombre||'').replace(/"/g,'""') + '"',
+      '"' + (p.zona||'').replace(/"/g,'""') + '"',
+      p.tipo || '', p.estado || 'Disponible', p.precio || '',
+      cap.meses, cap.pct + '%', Math.round(cap.capital), vistas, contactos
+    ].join(','));
+  });
+  lines.push('');
+  lines.push('Nota: la antiguedad en cartera y las cifras de vistas/contactos son estimados ilustrativos (DEMO) -- no hay fecha real de adjudicacion ni actividad real registrada en este navegador. El historial de cambios de precio, ciclos y leads a lo largo del tiempo requiere una base de datos real con registro continuo, no simulado.');
+  return lines.join('\n');
+}
+document.getElementById('bancoAuditReportBtn').addEventListener('click', () => {
+  const text = generateAuditoriaReport(getBancoInventory());
+  const blob = new Blob([text], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'uniko-reporte-auditoria-demo.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+});
 
 function renderBancoPanel(){
   document.getElementById('bancoWelcome').textContent = 'Bienvenido, ' + currentUser.name + '. Aquí carga tu banco el inventario que verán los compradores.';
