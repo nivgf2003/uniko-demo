@@ -2371,14 +2371,7 @@
   </div>
   <div id="proveedorProfileView" style="display:none; padding:0 16px 20px;"></div>
   <div id="proveedorEditForm" style="padding:0 16px 20px;">
-    <div class="auth-type-tabs" id="proveedorCategoriaTabs" style="flex-wrap:wrap;">
-      <button type="button" class="auth-type-btn" data-cat="Electricista">Electricista</button>
-      <button type="button" class="auth-type-btn" data-cat="Cerrajero">Cerrajero</button>
-      <button type="button" class="auth-type-btn" data-cat="Plomero">Plomero</button>
-      <button type="button" class="auth-type-btn" data-cat="Tasador">Tasador</button>
-      <button type="button" class="auth-type-btn" data-cat="Remodelación">Remodelación</button>
-      <button type="button" class="auth-type-btn" data-cat="Limpieza">Limpieza</button>
-    </div>
+    <div class="auth-type-tabs" id="proveedorCategoriaTabs" style="flex-wrap:wrap;"></div>
 
     <div class="sim-row" style="margin-top:14px;"><label>Nombre del negocio</label><input type="text" id="proveedorFormNegocio" placeholder="Ej. Electricidad Pérez"></div>
     <div class="sim-row"><label>Teléfono</label><input type="tel" id="proveedorFormTelefono" placeholder="Ej. +507 6000-0000"></div>
@@ -3996,7 +3989,19 @@ document.getElementById('bancoSaveBtn').addEventListener('click', () => {
 
 // -- Directorio de proveedores compartido (demo: registro guardado en localStorage de este navegador,
 // no hay backend real todavía — solo ve proveedores que se hayan dado de alta en ESTE navegador) --
-const PROVEEDOR_CATS = ['Electricista','Cerrajero','Plomero','Tasador','Remodelación','Limpieza'];
+// Catálogo ampliado de 6 a 24 categorías (spec Módulo Proveedor: catálogo base de 8 servicios +
+// catálogo ampliado). Se usan como nombre del oficio/rubro del proveedor, mismo estilo que ya
+// tenían las 6 originales (Electricista, no "Electricidad").
+const PROVEEDOR_CATS = [
+  'Electricista','Cerrajero','Plomero','Tasador','Remodelación','Limpieza',
+  'Inspección','Tour virtual','Pintura','Handyman','Fotografía','Video y dron','Medición',
+  'Jardinería','Control de plagas','Aire acondicionado','Impermeabilización','Piscina',
+  'Seguridad temporal','Abogado/Desalojo','Administración','Dossier comercial',
+  'Retiro de escombros','Preparación para venta',
+];
+document.getElementById('proveedorCategoriaTabs').innerHTML = PROVEEDOR_CATS.map(c =>
+  '<button type="button" class="auth-type-btn" data-cat="' + c + '">' + c + '</button>'
+).join('');
 const PROVIDERS_SEED = [
   { providerId: 'seed-1', negocio: 'Electricidad Pérez', categorias: ['Electricista'], telefono: '+507 6000-1111', email: 'juan@demo.com' },
   { providerId: 'seed-2', negocio: 'Cerrajería Rápida PTY', categorias: ['Cerrajero'], telefono: '+507 6000-2222', email: 'cerrajeriapty@demo.com' },
@@ -4008,6 +4013,11 @@ const PROVIDERS_SEED = [
   { providerId: 'seed-8', negocio: 'Cerrajería Chiriquí', categorias: ['Cerrajero'], telefono: '+507 6000-8888', email: 'cerrajeriachiriqui@demo.com' },
   { providerId: 'seed-9', negocio: 'Plomeros Express Azuero', categorias: ['Plomero'], telefono: '+507 6000-9999', email: 'plomerosazuero@demo.com' },
   { providerId: 'seed-10', negocio: 'Reformas y Acabados PTY', categorias: ['Remodelación'], telefono: '+507 6000-1010', email: 'reformasacabados@demo.com' },
+  { providerId: 'seed-11', negocio: 'Inspecciones Certificadas PTY', categorias: ['Inspección'], telefono: '+507 6000-1111', email: 'inspeccionespty@demo.com' },
+  { providerId: 'seed-12', negocio: '360 Tours Panamá', categorias: ['Tour virtual','Fotografía','Video y dron'], telefono: '+507 6000-1212', email: '360tours@demo.com' },
+  { providerId: 'seed-13', negocio: 'Pinturas y Acabados del Istmo', categorias: ['Pintura'], telefono: '+507 6000-1313', email: 'pinturasistmo@demo.com' },
+  { providerId: 'seed-14', negocio: 'Handyman Panamá', categorias: ['Handyman','Aire acondicionado'], telefono: '+507 6000-1414', email: 'handymanpty@demo.com' },
+  { providerId: 'seed-15', negocio: 'Jardines y Piscinas Coronado', categorias: ['Jardinería','Piscina','Control de plagas'], telefono: '+507 6000-1515', email: 'jardinespiscinas@demo.com' },
 ];
 function getProvidersRegistry(){
   try{
@@ -4019,6 +4029,24 @@ function getProvidersRegistry(){
     }
     return reg;
   }catch(e){ return []; }
+}
+// -- Motor de precio logístico (spec Módulo Proveedor / Banco, sección "Motor de precio logístico") --
+// Zonas remotas (islas, Darién, Bocas del Toro, Pedasí) nunca reciben un precio automático con
+// confianza incierta — el sistema pide validación logística en su lugar, tal como pide el documento.
+const REMOTE_ZONE_RE = /pedasí|pedasi|bocas del toro|darién|darien|comarca|\bisla\b|archipiélago|archipielago/i;
+const SERVICE_BASE_PRICE = {
+  'Inspección': [80,150], 'Tour virtual': [120,220], 'Tasador': [200,400], 'Limpieza': [60,150],
+  'Pintura': [200,600], 'Handyman': [50,180], 'Plomero': [40,150], 'Electricista': [40,150],
+  'Cerrajero': [30,90], 'Remodelación': [500,3000], 'Fotografía': [80,180], 'Video y dron': [150,350],
+  'Medición': [60,120], 'Jardinería': [40,120], 'Control de plagas': [50,140], 'Aire acondicionado': [80,250],
+  'Impermeabilización': [200,600], 'Piscina': [80,200], 'Seguridad temporal': [100,300],
+  'Abogado/Desalojo': [300,1200], 'Administración': [50,200], 'Dossier comercial': [150,400],
+  'Retiro de escombros': [100,350], 'Preparación para venta': [300,1000],
+};
+function estimateServicePrice(categoria, zona){
+  if(REMOTE_ZONE_RE.test(zona || '')) return { remote: true };
+  const [min, max] = SERVICE_BASE_PRICE[categoria] || [50, 200];
+  return { remote: false, price: stableFakeNumber(categoria + '|' + zona, min, max) };
 }
 function upsertProviderRegistry(profile){
   const reg = getProvidersRegistry();
@@ -4055,6 +4083,7 @@ function renderProviderDirectory(containerId, activeCats, context){
                 (inv.length === 0
                   ? '<span class="job-row-meta">Agrega una propiedad para poder solicitarle un servicio.</span>'
                   : '<select class="svc-property-select" data-provider="' + p.providerId + '"><option value="">Elegir propiedad…</option>' + propOptions + '</select>' +
+                    '<span class="svc-price-estimate" data-provider="' + p.providerId + '" style="display:block; font-size:.7rem; color:var(--ink-soft); margin:2px 0;"></span>' +
                     '<button type="button" class="job-action-btn svc-send-btn" data-provider="' + p.providerId + '">Enviar solicitud</button>') +
               '</div>'
             : '') +
@@ -4072,6 +4101,20 @@ function renderProviderDirectory(containerId, activeCats, context){
       renderProviderDirectory(containerId, cats, context);
     });
   });
+  container.querySelectorAll('.svc-property-select').forEach(sel => {
+    sel.addEventListener('change', () => {
+      const providerId = sel.dataset.provider;
+      const priceSpan = container.querySelector('.svc-price-estimate[data-provider="' + providerId + '"]');
+      if(!sel.value){ priceSpan.textContent = ''; return; }
+      const property = inv[parseInt(sel.value, 10)];
+      const provider = reg.find(p => p.providerId === providerId);
+      const categoria = (provider.categorias || [])[0] || 'Servicio general';
+      const est = estimateServicePrice(categoria, property.zona);
+      priceSpan.innerHTML = est.remote
+        ? '📍 Zona remota — sujeto a validación logística (no se confirma un costo automático)'
+        : 'Estimado: <b>' + money(est.price) + '</b>';
+    });
+  });
   container.querySelectorAll('.svc-send-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const providerId = btn.dataset.provider;
@@ -4082,6 +4125,8 @@ function renderProviderDirectory(containerId, activeCats, context){
       }
       const property = getBancoInventory()[parseInt(select.value, 10)];
       const provider = getProvidersRegistry().find(p => p.providerId === providerId);
+      const categoria = (provider.categorias || [])[0] || 'Servicio general';
+      const est = estimateServicePrice(categoria, property.zona);
       const jobs = getJobsRegistry();
       jobs.push({
         id: Date.now(),
@@ -4095,7 +4140,9 @@ function renderProviderDirectory(containerId, activeCats, context){
           area: property.area, hab: property.hab, banos: property.banos,
           precio: property.precio, fotos: property.fotos || []
         },
-        categoria: (provider.categorias || [])[0] || 'Servicio general',
+        categoria: categoria,
+        precioEstimado: est.remote ? null : est.price,
+        logisticaPendiente: est.remote,
         estado: 'Esperando tu respuesta',
         respuesta: '',
         createdAt: Date.now()
@@ -4160,6 +4207,7 @@ function renderProveedorJobs(){
       '<div>' +
         '<div class="job-row-title">' + j.categoria + ' — ' + prop.nombre + '</div>' +
         '<div class="job-row-meta">🏦 ' + j.bancoNombre + '</div>' +
+        '<div class="job-row-meta">' + (j.logisticaPendiente ? '📍 Zona remota — sujeto a validación logística' : j.precioEstimado ? 'Estimado del sistema: ' + money(j.precioEstimado) : '') + '</div>' +
         '<button type="button" class="job-view-prop-btn banco-item-service-btn" data-idx="' + j._idx + '" style="margin-top:6px;">Ver propiedad</button>' +
         (j.respuesta ? '<div class="job-row-meta" style="margin-top:6px; font-style:italic;">Tu respuesta: "' + j.respuesta + '"</div>' : '') +
       '</div>' +
