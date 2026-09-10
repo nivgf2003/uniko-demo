@@ -2364,6 +2364,9 @@
   <div class="map-section-title" style="margin-top:24px;">Venta en bloque / subastas institucionales</div>
   <div class="map-section-sub" style="margin-bottom:10px;">Marcá propiedades disponibles de tu cartera (recomendado: las más estancadas — ver "Prioridad de venta" más arriba) y armá un paquete para ofrecer a inversionistas institucionales de una sola vez, en vez de esperar la venta individual.</div>
   <div id="bancoBulkSale"></div>
+  <div class="map-section-title" style="margin-top:24px;">Tus solicitudes de servicio</div>
+  <div class="map-section-sub" style="margin-bottom:10px;">Servicios que le pediste a proveedores desde el directorio. Una vez pagado, podés calificarlo — la calificación queda en el perfil público del proveedor (spec: Sistema de Reputación Verificada).</div>
+  <div id="bancoJobs"></div>
   <div class="auth-note" style="margin-top:16px;">Demo: este inventario se guarda solo en este navegador (localStorage) — no hay servidor real todavía, y estas propiedades no aparecen en el catálogo del comprador. Sirve para mostrar el flujo de carga del banco (ver sección 12 del README, punto 4).</div>
 </main>
 </div>
@@ -3526,6 +3529,7 @@ function stableFakeNumber(seed, min, max){
   const frac = (Math.abs(h) % 1000) / 1000;
   return Math.round(min + frac*(max-min));
 }
+function starsHtml(n){ return '<span class="review-stars">' + '★'.repeat(n) + '☆'.repeat(5-n) + '</span>'; }
 function renderBancoAnalytics(inv){
   const box = document.getElementById('bancoAnalytics');
   const topList = inv.map(p => ({
@@ -3722,6 +3726,70 @@ document.getElementById('bancoAuditReportBtn').addEventListener('click', () => {
   URL.revokeObjectURL(url);
 });
 
+// -- Solicitudes de servicio del banco + calificación al proveedor (spec: Sistema de Reputación
+// Verificada). El banco es quien paga, así que "Marcar como pagado" y calificar viven acá, no
+// del lado del proveedor (antes el proveedor se auto-marcaba pagado, lo cual no tiene sentido:
+// quien paga es el banco). Solo se puede calificar una vez pagado, y solo una vez por trabajo.
+function renderBancoJobs(){
+  const container = document.getElementById('bancoJobs');
+  if(!container) return;
+  const jobs = getJobsRegistry();
+  const mine = jobs.map((j, i) => ({ ...j, _idx: i })).filter(j => j.bancoNombre === currentUser.name);
+  if(mine.length === 0){
+    container.innerHTML = '<div class="empty">Todavía no le pediste ningún servicio a un proveedor. Hacelo desde el directorio de proveedores más arriba.</div>';
+    return;
+  }
+  const statusClass = { 'Esperando tu respuesta': 'st-esperando', 'Respondiste, esperando pago': 'st-respondido', 'Pagado': 'st-pagado' };
+  const reg = getProvidersRegistry();
+  container.innerHTML = mine.map(j => {
+    const provider = reg.find(p => p.providerId === j.providerKey);
+    const prop = j.property || {};
+    return '<div class="job-row" style="align-items:flex-start;">' +
+      '<div>' +
+        '<div class="job-row-title">' + j.categoria + ' — ' + (prop.nombre || '') + '</div>' +
+        '<div class="job-row-meta">🛠️ ' + (provider ? (provider.negocio || provider.name) : 'Proveedor') + '</div>' +
+        (j.respuesta ? '<div class="job-row-meta" style="margin-top:6px; font-style:italic;">Respuesta: "' + j.respuesta + '"</div>' : '') +
+      '</div>' +
+      '<div class="job-row-actions">' +
+        '<span class="job-status ' + (statusClass[j.estado] || 'st-esperando') + '">' + j.estado + '</span>' +
+        (j.estado === 'Respondiste, esperando pago' ? '<button type="button" class="job-action-btn" data-idx="' + j._idx + '" data-next="Pagado">Marcar como pagado</button>' : '') +
+        (j.estado === 'Pagado' && !j.calificacion ? '<button type="button" class="job-action-btn job-rate-toggle" data-idx="' + j._idx + '">Calificar</button>' : '') +
+        (j.calificacion ? starsHtml(j.calificacion.estrellas) : '') +
+      '</div>' +
+      '<div class="banco-item-service-form job-rate-form" data-idx="' + j._idx + '" style="display:none; width:100%;">' +
+        '<select class="job-rate-stars">' + [5,4,3,2,1].map(n => '<option value="' + n + '">' + n + ' estrella' + (n>1?'s':'') + '</option>').join('') + '</select>' +
+        '<input type="text" class="job-rate-comment" placeholder="Comentario (opcional)" style="flex:1; min-width:160px; font-family:inherit; font-size:.8rem; padding:8px; border-radius:8px; border:1px solid var(--line);">' +
+        '<button type="button" class="job-action-btn job-rate-send" data-idx="' + j._idx + '">Enviar calificación</button>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+  container.querySelectorAll('.job-action-btn[data-next]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const jobs2 = getJobsRegistry();
+      jobs2[parseInt(btn.dataset.idx, 10)].estado = btn.dataset.next;
+      saveJobsRegistry(jobs2);
+      renderBancoJobs();
+    });
+  });
+  container.querySelectorAll('.job-rate-toggle').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const form = container.querySelector('.job-rate-form[data-idx="' + btn.dataset.idx + '"]');
+      form.style.display = form.style.display === 'none' ? 'flex' : 'none';
+    });
+  });
+  container.querySelectorAll('.job-rate-send').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const form = btn.closest('.job-rate-form');
+      const estrellas = parseInt(form.querySelector('.job-rate-stars').value, 10);
+      const comentario = form.querySelector('.job-rate-comment').value.trim();
+      const jobs2 = getJobsRegistry();
+      jobs2[parseInt(btn.dataset.idx, 10)].calificacion = { estrellas: estrellas, comentario: comentario, fecha: Date.now() };
+      saveJobsRegistry(jobs2);
+      renderBancoJobs();
+    });
+  });
+}
+
 function renderBancoPanel(){
   document.getElementById('bancoWelcome').textContent = 'Bienvenido, ' + currentUser.name + '. Aquí carga tu banco el inventario que verán los compradores.';
   renderProviderDirectory('bancoDirectory', null, 'banco');
@@ -3729,6 +3797,7 @@ function renderBancoPanel(){
   renderBancoAnalytics(inv);
   renderBancoCapital(inv);
   renderBancoBenchmark(inv);
+  renderBancoJobs();
   const listEl = document.getElementById('bancoInventoryList');
   if(inv.length === 0){
     listEl.innerHTML = '<div class="empty">Aún no has agregado ninguna propiedad. Toca "+ Agregar propiedad" para cargar la primera.</div>';
@@ -4266,7 +4335,7 @@ function renderProveedorJobs(){
       '<div class="job-row-actions">' +
         '<span class="job-status ' + (statusClass[j.estado] || 'st-esperando') + '">' + j.estado + '</span>' +
         (j.estado === 'Esperando tu respuesta' ? '<button type="button" class="job-action-btn job-reply-toggle" data-idx="' + j._idx + '">Responder</button>' : '') +
-        (j.estado === 'Respondiste, esperando pago' ? '<button type="button" class="job-action-btn" data-idx="' + j._idx + '" data-next="Pagado">Marcar como pagado</button>' : '') +
+        (j.calificacion ? '<span class="review-stars" title="Calificación del banco">' + starsHtml(j.calificacion.estrellas) + '</span>' : '') +
       '</div>' +
       '<div class="banco-item-service-form" data-idx="' + j._idx + '" style="display:none; width:100%;">' +
         '<textarea class="job-reply-text" rows="2" placeholder="Ej. Puedo el jueves a las 3pm, el costo es $80" style="flex:1; min-width:200px; font-family:inherit; font-size:.8rem; padding:8px; border-radius:8px; border:1px solid var(--line);"></textarea>' +
@@ -4343,6 +4412,9 @@ const FAKE_REVIEWS = [
   { nombre: 'Scotiabank/Davibank', texto: 'Buen precio, cumplió el horario acordado.', estrellas: 4 },
   { nombre: 'Unibank', texto: 'Muy profesional, lo volveríamos a contratar.', estrellas: 5 },
 ];
+// -- Sistema de reputación verificada (spec transversal, 10 sept) — a diferencia de FAKE_REVIEWS
+// (siempre ilustrativas), estas vienen de verdad de `job.calificacion`, puesta ahí por el banco
+// que pagó ese trabajo real (ver renderBancoJobs). Se muestran primero y sin tag "demo".
 function renderProveedorAnalytics(){
   const box = document.getElementById('proveedorAnalytics');
   const cat = (currentUser.categorias && currentUser.categorias[0]) || 'proveedores de servicio';
@@ -4351,20 +4423,29 @@ function renderProveedorAnalytics(){
   const completados = stableFakeNumber(seed + 'c', 2, solicitudes);
   const horasResp = (stableFakeNumber(seed + 'h', 8, 48) / 10).toFixed(1);
   const percentil = stableFakeNumber(seed + 'p', 55, 92);
-  const starsHtml = (n) => '<span class="review-stars">' + '★'.repeat(n) + '☆'.repeat(5-n) + '</span>';
+  const realRatings = getJobsRegistry().filter(j => j.providerKey === currentUser.providerId && j.calificacion);
+  const realAvg = realRatings.length ? (realRatings.reduce((s,j) => s + j.calificacion.estrellas, 0) / realRatings.length).toFixed(1) : null;
   box.innerHTML =
-    '<div class="analytics-demo-banner"><span class="analytics-demo-tag">DEMO</span> Números de ejemplo para mostrar el concepto — con actividad real en la plataforma, esto se calcula solo.</div>' +
+    '<div class="analytics-demo-banner"><span class="analytics-demo-tag">DEMO</span> Números de ejemplo para mostrar el concepto — con actividad real en la plataforma, esto se calcula solo. Las calificaciones marcadas "verificada" sí son reales (vienen de trabajos pagados de este navegador).</div>' +
     '<div class="analytics-kpis">' +
       '<div class="analytics-kpi"><div class="analytics-kpi-value">' + solicitudes + '</div><div class="analytics-kpi-label">Solicitudes este mes</div></div>' +
       '<div class="analytics-kpi"><div class="analytics-kpi-value">' + horasResp + ' hs</div><div class="analytics-kpi-label">Tiempo de respuesta promedio</div></div>' +
       '<div class="analytics-kpi"><div class="analytics-kpi-value">' + completados + '</div><div class="analytics-kpi-label">Trabajos completados</div></div>' +
     '</div>' +
+    (realAvg ? '<div class="analytics-market"><div class="analytics-market-title">Tu calificación promedio ' + starsHtml(Math.round(realAvg)) + ' ' + realAvg + ' <span class="analytics-demo-tag-sm" style="background:var(--gold-soft); color:var(--green);">verificada</span></div><div class="analytics-market-detail">Basada en ' + realRatings.length + ' trabajo' + (realRatings.length===1?'':'s') + ' pagado' + (realRatings.length===1?'':'s') + ' y calificado' + (realRatings.length===1?'':'s') + ' por el banco.</div></div>' : '') +
     '<div class="analytics-market">' +
       '<div class="analytics-market-title">Tu desempeño vs. otros ' + cat.toLowerCase() + 's <span class="analytics-demo-tag-sm">demo</span></div>' +
       '<div class="analytics-market-detail">Respondés más rápido que el <b>' + percentil + '%</b> de los ' + cat.toLowerCase() + 's en tu zona — eso te ubica más arriba cuando un banco elige a quién enviarle una solicitud.</div>' +
     '</div>' +
+    (realRatings.length ? '<div class="analytics-top"><div class="analytics-top-title">Calificaciones reales <span class="analytics-demo-tag-sm" style="background:var(--gold-soft); color:var(--green);">verificada</span></div>' +
+      realRatings.map(j =>
+        '<div class="review-row">' +
+          '<div class="review-top"><span class="review-name">' + j.bancoNombre + '</span>' + starsHtml(j.calificacion.estrellas) + '</div>' +
+          (j.calificacion.comentario ? '<div class="review-text">"' + j.calificacion.comentario + '"</div>' : '') +
+        '</div>'
+      ).join('') + '</div>' : '') +
     '<div class="analytics-top">' +
-      '<div class="analytics-top-title">Reseñas recientes <span class="analytics-demo-tag-sm">demo</span></div>' +
+      '<div class="analytics-top-title">Reseñas de ejemplo <span class="analytics-demo-tag-sm">demo</span></div>' +
       FAKE_REVIEWS.map(r =>
         '<div class="review-row">' +
           '<div class="review-top"><span class="review-name">' + r.nombre + '</span>' + starsHtml(r.estrellas) + '</div>' +
