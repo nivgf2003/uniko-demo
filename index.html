@@ -4180,11 +4180,20 @@ const SERVICE_BASE_PRICE = {
   'Abogado/Desalojo': [300,1200], 'Administración': [50,200], 'Dossier comercial': [150,400],
   'Retiro de escombros': [100,350], 'Preparación para venta': [300,1000],
 };
-function estimateServicePrice(categoria, zona){
+function estimateServicePrice(categoria, zona, priceTable){
   if(REMOTE_ZONE_RE.test(zona || '')) return { remote: true };
-  const [min, max] = SERVICE_BASE_PRICE[categoria] || [50, 200];
+  const [min, max] = (priceTable || SERVICE_BASE_PRICE)[categoria] || [50, 200];
   return { remote: false, price: stableFakeNumber(categoria + '|' + zona, min, max) };
 }
+// -- UniKo Verifica (Master Plan, doc transversal + Comprador módulo H + Banco módulo M) --
+// 4 productos separados, cada uno con su propio precio base — mismo motor de precio logístico
+// que ya usan las solicitudes de servicio a proveedores (misma REMOTE_ZONE_RE, mismo patrón).
+const VERIFICA_PRODUCTS = {
+  'Levantamiento visual documentado': { precio: [90, 180], incluye: ['Fotos y video reales de cada ambiente', 'Inventario de espacios y amenidades', 'Funcionamiento observable (agua, luz) y defectos aparentes', 'Dossier con resumen, recorrido y hallazgos por gravedad'] },
+  'Visita virtual en vivo': { precio: [60, 130], incluye: ['Videollamada guiada en el horario que coordines', 'Vos dirigís el recorrido y preguntás en tiempo real', 'No requiere informe posterior — es la visita misma'] },
+  'Tour virtual 360°': { precio: [150, 300], incluye: ['Recorrido inmersivo navegable, como una visita a distancia', 'Enlace que podés compartir con quien decida con vos', 'Complementa (no reemplaza) el levantamiento visual'] },
+  'Inspección técnica certificada': { precio: [200, 450], incluye: ['Profesional idóneo según la especialidad requerida', 'Dictamen técnico (eléctrico, plomería, estructura, avalúo)', 'No sustituye estudio de título ni avalúo bancario formal'] },
+};
 function upsertProviderRegistry(profile){
   const reg = getProvidersRegistry();
   const idx = reg.findIndex(p => p.providerId === profile.providerId);
@@ -4640,17 +4649,26 @@ function renderList(){
         ? '<a class="btn btn-map" href="' + mapsUrl(p) + '" target="_blank" rel="noopener"><span class="btn-icon-circle">' + ICON_PIN + '</span>Ubicación</a>'
         : '<span class="btn btn-map disabled"><span class="btn-icon-circle">' + ICON_PIN + '</span>Sin ubicación</span>';
 
-      const certSubject = encodeURIComponent('Solicitud de certificación en sitio — ' + p.nombre);
-      const certBody = encodeURIComponent(
-        'Hola,\n\nQuiero solicitar el servicio de certificación en sitio para esta propiedad:\n\n' +
-        'Propiedad: ' + p.nombre + '\n' +
-        'Banco: ' + p.banco + '\n' +
-        'Zona: ' + p.zona + '\n' +
-        'Finca: ' + (p.finca || 'N/D') + '\n\n' +
-        'Entiendo que el servicio incluye visita presencial, fotos y video reales, y documento de inventario a la fecha.\n\n' +
-        'Quedo atento a la confirmación del costo y el pago.\n\nGracias.'
-      );
-      const certMailto = 'mailto:?subject=' + certSubject + '&body=' + certBody;
+      // Precio de cada producto de UniKo Verifica para ESTA propiedad, calculado ahora mismo
+      // (no al abrir el desplegable) porque el mailto de cada opción necesita el número ya listo.
+      const verificaOptions = Object.keys(VERIFICA_PRODUCTS).map(prod => {
+        const est = estimateServicePrice(prod, p.zona, { [prod]: VERIFICA_PRODUCTS[prod].precio });
+        return { nombre: prod, ...est, incluye: VERIFICA_PRODUCTS[prod].incluye };
+      });
+      function verificaMailto(opt){
+        const subject = encodeURIComponent('Solicitud UniKo Verifica: ' + opt.nombre + ' — ' + p.nombre);
+        const body = encodeURIComponent(
+          'Hola,\n\nQuiero solicitar este producto de UniKo Verifica:\n\n' +
+          'Producto: ' + opt.nombre + '\n' +
+          'Propiedad: ' + p.nombre + '\n' +
+          'Banco: ' + p.banco + '\n' +
+          'Zona: ' + p.zona + '\n' +
+          'Finca: ' + (p.finca || 'N/D') + '\n' +
+          (opt.remote ? 'Precio: sujeto a validación logística (zona remota)\n' : 'Precio estimado por el sistema: ' + money(opt.price) + '\n') +
+          '\nEntiendo que el pago se coordina directamente hasta que exista pasarela de pago integrada.\n\nGracias.'
+        );
+        return 'mailto:?subject=' + subject + '&body=' + body;
+      }
 
       const bankEmails = {
         'BAC (ex-Multibank)': 'bacreposeidos@pa.bac.net',
@@ -4676,19 +4694,19 @@ function renderList(){
           '<button type="button" class="certify-trigger">' +
             '<span class="certify-icon">✓</span>' +
             '<span class="certify-text">' +
-              '<div class="certify-title">Certificación en sitio</div>' +
-              '<div class="certify-sub">Fotos, video y estado real — servicio adicional</div>' +
+              '<div class="certify-title">UniKo Verifica</div>' +
+              '<div class="certify-sub">Conocé la propiedad a distancia — fotos, video, tour o inspección técnica</div>' +
             '</span>' +
             '<span class="certify-chevron">›</span>' +
           '</button>' +
           '<div class="certify-body">' +
-            '<ul class="certify-includes">' +
-              '<li>✅ Visita presencial de un ejecutivo</li>' +
-              '<li>✅ Fotos y video reales del estado actual</li>' +
-              '<li>✅ Documento con inventario a la fecha (acabados, daños, ocupación, accesos)</li>' +
-            '</ul>' +
-            '<div class="certify-price">Costo y tiempo de entrega se confirman al aceptar — aún no se ha certificado ninguna propiedad de este listado.</div>' +
-            '<a class="btn-accept" href="' + certMailto + '">Aceptar y continuar al pago →</a>' +
+            '<select class="verifica-product-select" style="width:100%; margin-bottom:8px; font-family:inherit; font-size:.82rem; padding:8px; border-radius:8px; border:1px solid var(--line);">' +
+              verificaOptions.map((o,i) => '<option value="' + i + '">' + o.nombre + (o.remote ? ' — sujeto a validación logística' : ' — ' + money(o.price)) + '</option>').join('') +
+            '</select>' +
+            '<ul class="certify-includes verifica-includes"></ul>' +
+            '<div class="certify-price verifica-price"></div>' +
+            '<a class="btn-accept verifica-accept" href="#">Aceptar y continuar al pago →</a>' +
+            '<div class="map-caption" style="padding:6px 0 0;">El levantamiento en sitio hoy lo coordina un ejecutivo directamente — la app guiada con GPS y checklist en tiempo real que describe la especificación completa es trabajo de la versión real, no de este demo.</div>' +
           '</div>' +
         '</div></div>';
 
@@ -4738,6 +4756,19 @@ function renderList(){
         cCard.classList.toggle('open');
         cCard.querySelector('.certify-body').classList.toggle('open');
       });
+      // UniKo Verifica: refresca precio/incluye/mailto al elegir producto, y una vez al abrir.
+      const verificaSelect = cCard.querySelector('.verifica-product-select');
+      function refreshVerificaOption(){
+        const opt = verificaOptions[parseInt(verificaSelect.value, 10)];
+        cCard.querySelector('.verifica-includes').innerHTML = opt.incluye.map(t => '<li>✅ ' + t + '</li>').join('');
+        cCard.querySelector('.verifica-price').textContent = opt.remote
+          ? '📍 Zona remota — sujeto a validación logística, te confirmamos el costo antes de cobrar.'
+          : 'Estimado del sistema: ' + money(opt.price) + '. El pago se coordina directamente hasta que exista pasarela integrada.';
+        cCard.querySelector('.verifica-accept').href = verificaMailto(opt);
+      }
+      verificaSelect.addEventListener('click', (e) => e.stopPropagation());
+      verificaSelect.addEventListener('change', refreshVerificaOption);
+      refreshVerificaOption();
       const simButtonEl = card.querySelector('.btn-sim');
       if(simButtonEl){
         simButtonEl.addEventListener('click', (e) => {
