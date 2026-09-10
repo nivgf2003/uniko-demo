@@ -1978,6 +1978,9 @@
   }
   .job-status.st-esperando{ background:#FBF0DC; color:var(--gold); }
   .job-status.st-respondido{ background:#E1EAF5; color:#2B6CB0; }
+  .job-status.st-cotizada{ background:#E1EAF5; color:#2B6CB0; }
+  .job-status.st-aprobada{ background:#EFE6F7; color:#6B3FA0; }
+  .job-status.st-evidencia{ background:#F7E6DE; color:var(--coral); }
   .job-status.st-pagado{ background:#E4F1E8; color:var(--green); }
   .job-action-btn{
     font-family:inherit;
@@ -3530,6 +3533,18 @@ function stableFakeNumber(seed, min, max){
   return Math.round(min + frac*(max-min));
 }
 function starsHtml(n){ return '<span class="review-stars">' + '★'.repeat(n) + '☆'.repeat(5-n) + '</span>'; }
+// Pipeline de órdenes de trabajo (spec: Motor de Órdenes de Trabajo Digitales) — versión
+// acotada para el demo: solicitada -> cotización enviada -> aprobada/en ejecución ->
+// evidencia enviada -> pagada (+ calificada). No se implementan los 7 estados completos del
+// documento (ej. "en ruta", roles separados de aprobador/finanzas) — eso necesita permisos
+// reales por usuario, que este demo de un solo login por rol no tiene.
+const JOB_STATUS_CLASS = {
+  'Esperando tu respuesta': 'st-esperando',
+  'Cotización enviada': 'st-cotizada',
+  'Aprobada, en ejecución': 'st-aprobada',
+  'Evidencia enviada': 'st-evidencia',
+  'Pagado': 'st-pagado',
+};
 function renderBancoAnalytics(inv){
   const box = document.getElementById('bancoAnalytics');
   const topList = inv.map(p => ({
@@ -3739,7 +3754,6 @@ function renderBancoJobs(){
     container.innerHTML = '<div class="empty">Todavía no le pediste ningún servicio a un proveedor. Hacelo desde el directorio de proveedores más arriba.</div>';
     return;
   }
-  const statusClass = { 'Esperando tu respuesta': 'st-esperando', 'Respondiste, esperando pago': 'st-respondido', 'Pagado': 'st-pagado' };
   const reg = getProvidersRegistry();
   container.innerHTML = mine.map(j => {
     const provider = reg.find(p => p.providerId === j.providerKey);
@@ -3748,11 +3762,13 @@ function renderBancoJobs(){
       '<div>' +
         '<div class="job-row-title">' + j.categoria + ' — ' + (prop.nombre || '') + '</div>' +
         '<div class="job-row-meta">🛠️ ' + (provider ? (provider.negocio || provider.name) : 'Proveedor') + '</div>' +
-        (j.respuesta ? '<div class="job-row-meta" style="margin-top:6px; font-style:italic;">Respuesta: "' + j.respuesta + '"</div>' : '') +
+        (j.cotizacion ? '<div class="job-row-meta" style="margin-top:6px;">Cotización: <b>' + money(j.cotizacion.monto) + '</b> · plazo: ' + j.cotizacion.plazo + (j.cotizacion.nota ? ' — "' + j.cotizacion.nota + '"' : '') + '</div>' : '') +
+        (j.evidencia ? '<div class="job-row-meta" style="margin-top:6px; font-style:italic;">Evidencia: "' + j.evidencia.nota + '"' + (j.evidencia.foto ? ' <a href="' + j.evidencia.foto + '" target="_blank">ver foto</a>' : '') + '</div>' : '') +
       '</div>' +
       '<div class="job-row-actions">' +
-        '<span class="job-status ' + (statusClass[j.estado] || 'st-esperando') + '">' + j.estado + '</span>' +
-        (j.estado === 'Respondiste, esperando pago' ? '<button type="button" class="job-action-btn" data-idx="' + j._idx + '" data-next="Pagado">Marcar como pagado</button>' : '') +
+        '<span class="job-status ' + (JOB_STATUS_CLASS[j.estado] || 'st-esperando') + '">' + j.estado + '</span>' +
+        (j.estado === 'Cotización enviada' ? '<button type="button" class="job-action-btn" data-idx="' + j._idx + '" data-next="Aprobada, en ejecución">Aprobar cotización</button>' : '') +
+        (j.estado === 'Evidencia enviada' ? '<button type="button" class="job-action-btn" data-idx="' + j._idx + '" data-next="Pagado">Revisar y marcar como pagado</button>' : '') +
         (j.estado === 'Pagado' && !j.calificacion ? '<button type="button" class="job-action-btn job-rate-toggle" data-idx="' + j._idx + '">Calificar</button>' : '') +
         (j.calificacion ? starsHtml(j.calificacion.estrellas) : '') +
       '</div>' +
@@ -4320,7 +4336,6 @@ function renderProveedorJobs(){
     container.innerHTML = '<div class="empty">Todavía nadie te ha solicitado un trabajo. Cuando un banco te contacte para un servicio, aparecerá aquí.</div>';
     return;
   }
-  const statusClass = { 'Esperando tu respuesta': 'st-esperando', 'Respondiste, esperando pago': 'st-respondido', 'Pagado': 'st-pagado' };
   container.innerHTML = mine.map(j => {
     const prop = j.property || { nombre: j.propertyName }; // compatibilidad con trabajos creados antes de este cambio
     return (
@@ -4330,16 +4345,25 @@ function renderProveedorJobs(){
         '<div class="job-row-meta">🏦 ' + j.bancoNombre + '</div>' +
         '<div class="job-row-meta">' + (j.logisticaPendiente ? '📍 Zona remota — sujeto a validación logística' : j.precioEstimado ? 'Estimado del sistema: ' + money(j.precioEstimado) : '') + '</div>' +
         '<button type="button" class="job-view-prop-btn banco-item-service-btn" data-idx="' + j._idx + '" style="margin-top:6px;">Ver propiedad</button>' +
-        (j.respuesta ? '<div class="job-row-meta" style="margin-top:6px; font-style:italic;">Tu respuesta: "' + j.respuesta + '"</div>' : '') +
+        (j.cotizacion ? '<div class="job-row-meta" style="margin-top:6px;">Tu cotización: <b>' + money(j.cotizacion.monto) + '</b> · plazo: ' + j.cotizacion.plazo + (j.cotizacion.nota ? ' — "' + j.cotizacion.nota + '"' : '') + '</div>' : '') +
+        (j.evidencia ? '<div class="job-row-meta" style="margin-top:6px; font-style:italic;">Evidencia enviada: "' + j.evidencia.nota + '"' + (j.evidencia.foto ? ' 📷' : '') + '</div>' : '') +
       '</div>' +
       '<div class="job-row-actions">' +
-        '<span class="job-status ' + (statusClass[j.estado] || 'st-esperando') + '">' + j.estado + '</span>' +
-        (j.estado === 'Esperando tu respuesta' ? '<button type="button" class="job-action-btn job-reply-toggle" data-idx="' + j._idx + '">Responder</button>' : '') +
+        '<span class="job-status ' + (JOB_STATUS_CLASS[j.estado] || 'st-esperando') + '">' + j.estado + '</span>' +
+        (j.estado === 'Esperando tu respuesta' ? '<button type="button" class="job-action-btn job-quote-toggle" data-idx="' + j._idx + '">Enviar cotización</button>' : '') +
+        (j.estado === 'Aprobada, en ejecución' ? '<button type="button" class="job-action-btn job-evidence-toggle" data-idx="' + j._idx + '">Subir evidencia y completar</button>' : '') +
         (j.calificacion ? '<span class="review-stars" title="Calificación del banco">' + starsHtml(j.calificacion.estrellas) + '</span>' : '') +
       '</div>' +
-      '<div class="banco-item-service-form" data-idx="' + j._idx + '" style="display:none; width:100%;">' +
-        '<textarea class="job-reply-text" rows="2" placeholder="Ej. Puedo el jueves a las 3pm, el costo es $80" style="flex:1; min-width:200px; font-family:inherit; font-size:.8rem; padding:8px; border-radius:8px; border:1px solid var(--line);"></textarea>' +
-        '<button type="button" class="job-action-btn job-reply-send" data-idx="' + j._idx + '">Enviar respuesta</button>' +
+      '<div class="banco-item-service-form job-quote-form" data-idx="' + j._idx + '" style="display:none; width:100%;">' +
+        '<input type="number" class="job-quote-monto" placeholder="Monto ($)" min="0" style="width:110px; font-family:inherit; font-size:.8rem; padding:8px; border-radius:8px; border:1px solid var(--line);">' +
+        '<input type="text" class="job-quote-plazo" placeholder="Plazo, ej. 2 días" style="width:130px; font-family:inherit; font-size:.8rem; padding:8px; border-radius:8px; border:1px solid var(--line);">' +
+        '<textarea class="job-quote-nota" rows="2" placeholder="Nota (opcional)" style="flex:1; min-width:160px; font-family:inherit; font-size:.8rem; padding:8px; border-radius:8px; border:1px solid var(--line);"></textarea>' +
+        '<button type="button" class="job-action-btn job-quote-send" data-idx="' + j._idx + '">Enviar cotización</button>' +
+      '</div>' +
+      '<div class="banco-item-service-form job-evidence-form" data-idx="' + j._idx + '" style="display:none; width:100%;">' +
+        '<textarea class="job-evidence-nota" rows="2" placeholder="Ej. Trabajo terminado, se cambió la llave y se probó el flujo de agua" style="flex:1; min-width:200px; font-family:inherit; font-size:.8rem; padding:8px; border-radius:8px; border:1px solid var(--line);"></textarea>' +
+        '<input type="file" class="job-evidence-foto" accept="image/*">' +
+        '<button type="button" class="job-action-btn job-evidence-send" data-idx="' + j._idx + '">Enviar evidencia</button>' +
       '</div>' +
     '</div>'
     );
@@ -4350,30 +4374,53 @@ function renderProveedorJobs(){
       openJobPropertyModal(job.property || { nombre: job.propertyName });
     });
   });
-  container.querySelectorAll('.job-reply-toggle').forEach(btn => {
+  container.querySelectorAll('.job-quote-toggle').forEach(btn => {
     btn.addEventListener('click', () => {
-      const form = container.querySelector('.banco-item-service-form[data-idx="' + btn.dataset.idx + '"]');
+      const form = container.querySelector('.job-quote-form[data-idx="' + btn.dataset.idx + '"]');
       form.style.display = form.style.display === 'none' ? 'flex' : 'none';
     });
   });
-  container.querySelectorAll('.job-reply-send').forEach(btn => {
+  container.querySelectorAll('.job-quote-send').forEach(btn => {
     btn.addEventListener('click', () => {
-      const form = btn.closest('.banco-item-service-form');
-      const text = form.querySelector('.job-reply-text').value.trim();
-      if(!text){ alert('Escribe una respuesta antes de enviar.'); return; }
+      const form = btn.closest('.job-quote-form');
+      const monto = parseFloat(form.querySelector('.job-quote-monto').value);
+      const plazo = form.querySelector('.job-quote-plazo').value.trim();
+      const nota = form.querySelector('.job-quote-nota').value.trim();
+      if(!monto || !plazo){ alert('Completá al menos el monto y el plazo.'); return; }
       const jobs2 = getJobsRegistry();
-      jobs2[parseInt(btn.dataset.idx, 10)].estado = 'Respondiste, esperando pago';
-      jobs2[parseInt(btn.dataset.idx, 10)].respuesta = text;
+      jobs2[parseInt(btn.dataset.idx, 10)].estado = 'Cotización enviada';
+      jobs2[parseInt(btn.dataset.idx, 10)].cotizacion = { monto: monto, plazo: plazo, nota: nota };
       saveJobsRegistry(jobs2);
       renderProveedorJobs();
     });
   });
-  container.querySelectorAll('.job-action-btn[data-next]').forEach(btn => {
+  container.querySelectorAll('.job-evidence-toggle').forEach(btn => {
     btn.addEventListener('click', () => {
-      const jobs2 = getJobsRegistry();
-      jobs2[parseInt(btn.dataset.idx, 10)].estado = btn.dataset.next;
-      saveJobsRegistry(jobs2);
-      renderProveedorJobs();
+      const form = container.querySelector('.job-evidence-form[data-idx="' + btn.dataset.idx + '"]');
+      form.style.display = form.style.display === 'none' ? 'flex' : 'none';
+    });
+  });
+  container.querySelectorAll('.job-evidence-send').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const form = btn.closest('.job-evidence-form');
+      const nota = form.querySelector('.job-evidence-nota').value.trim();
+      const fileInput = form.querySelector('.job-evidence-foto');
+      if(!nota){ alert('Describí brevemente el trabajo completado.'); return; }
+      const idx = parseInt(btn.dataset.idx, 10);
+      const finish = (fotoDataUrl) => {
+        const jobs2 = getJobsRegistry();
+        jobs2[idx].estado = 'Evidencia enviada';
+        jobs2[idx].evidencia = { nota: nota, foto: fotoDataUrl || null };
+        saveJobsRegistry(jobs2);
+        renderProveedorJobs();
+      };
+      if(fileInput.files[0]){
+        const reader = new FileReader();
+        reader.onload = () => finish(reader.result);
+        reader.readAsDataURL(fileInput.files[0]);
+      } else {
+        finish(null);
+      }
     });
   });
 }
