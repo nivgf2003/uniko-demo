@@ -2387,6 +2387,24 @@
   <div class="map-section-title" style="margin-top:24px;">Tus solicitudes de servicio</div>
   <div class="map-section-sub" style="margin-bottom:10px;">Servicios que le pediste a proveedores desde el directorio. Una vez pagado, podés calificarlo — la calificación queda en el perfil público del proveedor (spec: Sistema de Reputación Verificada).</div>
   <div id="bancoJobs"></div>
+  <div class="map-section-title" style="margin-top:24px;">Equipo de tu cuenta</div>
+  <div class="map-section-sub" style="margin-bottom:10px;">Agregá a otras personas de tu banco que deberían ver este panel. Demo honesto: es una lista guardada en tu navegador — no crea logins separados de verdad, todos siguen entrando con este mismo usuario hasta que haya un backend real con autenticación multiusuario (fase post-piloto, ver análisis de negocio).</div>
+  <div style="margin-bottom:10px;">
+    <button type="button" class="auth-btn" id="bancoTeamAddBtn">+ Agregar miembro</button>
+  </div>
+  <div id="bancoTeamAddForm" class="banco-form" style="display:none;">
+    <div class="banco-form-grid">
+      <div class="sim-row"><label>Nombre</label><input type="text" id="bancoTeamNombre" placeholder="Ej. María Torres"></div>
+      <div class="sim-row"><label>Email</label><input type="email" id="bancoTeamEmail" placeholder="maria@bancoejemplo.com"></div>
+      <div class="sim-row"><label>Rol</label>
+        <select id="bancoTeamRol">
+          <option>Administrador</option><option>Editor</option><option>Solo lectura</option>
+        </select>
+      </div>
+    </div>
+    <button type="button" class="sim-calc-btn" id="bancoTeamSaveBtn">Agregar</button>
+  </div>
+  <div id="bancoTeam"></div>
   <div class="auth-note" style="margin-top:16px;">Demo: este inventario se guarda solo en este navegador (localStorage) — no hay servidor real todavía, y estas propiedades no aparecen en el catálogo del comprador. Sirve para mostrar el flujo de carga del banco (ver sección 12 del README, punto 4).</div>
 </main>
 </div>
@@ -3922,6 +3940,49 @@ function renderBancoJobs(){
   });
 }
 
+// -- Equipo del banco (spec Módulo Banco, sección K "usuarios multi-seat") — DEMO deliberado:
+// esto simula la LISTA de miembros (nombre/email/rol), pero no crea logins reales separados;
+// todos siguen usando la sesión actual del navegador. Fingir auth multiusuario real en un demo
+// de un solo localStorage sería engañoso para un banco — la lista sí es honesta y útil como
+// vista previa de la funcionalidad. Auth real: fase post-piloto, con backend.
+function bancoTeamKey(){
+  return bancoStorageKey() + '_team';
+}
+function getBancoTeam(){
+  return JSON.parse(localStorage.getItem(bancoTeamKey()) || '[]');
+}
+function saveBancoTeam(list){
+  localStorage.setItem(bancoTeamKey(), JSON.stringify(list));
+}
+function renderBancoTeam(){
+  const container = document.getElementById('bancoTeam');
+  if(!container) return;
+  const team = getBancoTeam();
+  const rolTag = rol => rol === 'Administrador' ? 'tag-verified' : (rol === 'Editor' ? 'tag-inline' : 'tag-unverified');
+  container.innerHTML = team.length === 0
+    ? '<div class="empty">Por ahora sos el único usuario de esta cuenta.</div>'
+    : team.map((m, i) =>
+        '<div class="job-row">' +
+          '<div>' +
+            '<div class="job-row-title">' + m.nombre + '</div>' +
+            '<div class="job-row-meta">' + m.email + '</div>' +
+          '</div>' +
+          '<div class="job-row-actions">' +
+            '<span class="tag ' + rolTag(m.rol) + '">' + m.rol + '</span>' +
+            '<button type="button" class="banco-team-del" data-idx="' + i + '" title="Quitar">✕</button>' +
+          '</div>' +
+        '</div>'
+      ).join('');
+  container.querySelectorAll('.banco-team-del').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const t2 = getBancoTeam();
+      t2.splice(parseInt(btn.dataset.idx, 10), 1);
+      saveBancoTeam(t2);
+      renderBancoTeam();
+    });
+  });
+}
+
 function renderBancoPanel(){
   document.getElementById('bancoWelcome').textContent = 'Bienvenido, ' + currentUser.name + '. Aquí carga tu banco el inventario que verán los compradores.';
   renderProviderDirectory('bancoDirectory', null, 'banco');
@@ -3931,6 +3992,7 @@ function renderBancoPanel(){
   renderBancoBenchmark(inv);
   renderBancoDemanda(inv);
   renderBancoJobs();
+  renderBancoTeam();
   const listEl = document.getElementById('bancoInventoryList');
   if(inv.length === 0){
     listEl.innerHTML = '<div class="empty">Aún no has agregado ninguna propiedad. Toca "+ Agregar propiedad" para cargar la primera.</div>';
@@ -4053,6 +4115,24 @@ function updateBancoBulkSummary(){
 document.getElementById('bancoAddBtn').addEventListener('click', () => {
   const form = document.getElementById('bancoAddForm');
   form.style.display = form.style.display === 'none' ? 'block' : 'none';
+});
+
+document.getElementById('bancoTeamAddBtn').addEventListener('click', () => {
+  const form = document.getElementById('bancoTeamAddForm');
+  form.style.display = form.style.display === 'none' ? 'block' : 'none';
+});
+document.getElementById('bancoTeamSaveBtn').addEventListener('click', () => {
+  const nombre = document.getElementById('bancoTeamNombre').value.trim();
+  const email = document.getElementById('bancoTeamEmail').value.trim();
+  const rol = document.getElementById('bancoTeamRol').value;
+  if(!nombre || !email){ alert('Completá nombre y email.'); return; }
+  const team = getBancoTeam();
+  team.push({ nombre, email, rol });
+  saveBancoTeam(team);
+  document.getElementById('bancoTeamNombre').value = '';
+  document.getElementById('bancoTeamEmail').value = '';
+  document.getElementById('bancoTeamAddForm').style.display = 'none';
+  renderBancoTeam();
 });
 
 // -- Carga inteligente de inventario (spec Módulo Banco, sección B) --
