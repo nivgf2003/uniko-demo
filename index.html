@@ -3891,7 +3891,8 @@ function renderBancoJobs(){
     return '<div class="job-row" style="align-items:flex-start;">' +
       '<div>' +
         '<div class="job-row-title">' + j.categoria + ' — ' + (prop.nombre || '') + '</div>' +
-        '<div class="job-row-meta">🛠️ ' + (provider ? (provider.negocio || provider.name) : 'Proveedor') + '</div>' +
+        '<div class="job-row-meta">🛠️ ' + (provider ? (provider.negocio || provider.name) : 'Proveedor') + (j.alcance ? ' · ' + j.alcance : '') + '</div>' +
+        (j.descripcion ? '<div class="job-row-meta" style="margin-top:4px; font-style:italic;">"' + j.descripcion + '"</div>' : '') +
         (j.cotizacion ? '<div class="job-row-meta" style="margin-top:6px;">Cotización: <b>' + money(j.cotizacion.monto) + '</b> · plazo: ' + j.cotizacion.plazo + (j.cotizacion.nota ? ' — "' + j.cotizacion.nota + '"' : '') + '</div>' : '') +
         (j.evidencia ? '<div class="job-row-meta" style="margin-top:6px; font-style:italic;">Evidencia: "' + j.evidencia.nota + '"' + (j.evidencia.foto ? ' <a href="' + j.evidencia.foto + '" target="_blank">ver foto</a>' : '') + '</div>' : '') +
       '</div>' +
@@ -4377,10 +4378,20 @@ const SERVICE_BASE_PRICE = {
   'Abogado/Desalojo': [300,1200], 'Administración': [50,200], 'Dossier comercial': [150,400],
   'Retiro de escombros': [100,350], 'Preparación para venta': [300,1000],
 };
-function estimateServicePrice(categoria, zona, priceTable){
+// Alcance del trabajo: sin esto, "Electricista" cobraba lo mismo por cambiar una lámpara que por
+// recablear toda la casa. El comprador/banco elige el alcance real y el precio se escala — sigue
+// siendo un estimado (el proveedor confirma el número final en su cotización), pero ya no ignora
+// si el trabajo es puntual o una obra grande.
+const SCOPE_MULTIPLIER = {
+  'Puntual': 0.4,
+  'Reparación media': 1,
+  'Obra mayor': 2.8,
+};
+function estimateServicePrice(categoria, zona, priceTable, alcance){
   if(REMOTE_ZONE_RE.test(zona || '')) return { remote: true };
   const [min, max] = (priceTable || SERVICE_BASE_PRICE)[categoria] || [50, 200];
-  return { remote: false, price: stableFakeNumber(categoria + '|' + zona, min, max) };
+  const mult = SCOPE_MULTIPLIER[alcance] || 1;
+  return { remote: false, price: Math.round(stableFakeNumber(categoria + '|' + zona + '|' + (alcance||''), min * mult, max * mult)) };
 }
 // -- UniKo Verifica (Master Plan, doc transversal + Comprador módulo H + Banco módulo M) --
 // 4 productos separados, cada uno con su propio precio base — mismo motor de precio logístico
@@ -4426,6 +4437,12 @@ function renderProviderDirectory(containerId, activeCats, context){
                 (inv.length === 0
                   ? '<span class="job-row-meta">Agrega una propiedad para poder solicitarle un servicio.</span>'
                   : '<select class="svc-property-select" data-provider="' + p.providerId + '"><option value="">Elegir propiedad…</option>' + propOptions + '</select>' +
+                    '<textarea class="svc-desc-input" data-provider="' + p.providerId + '" rows="2" placeholder="¿Qué necesitás? Ej. cambiar un tomacorriente, no hay corto pero se corta la luz seguido…" style="width:100%; font-family:inherit; font-size:.72rem; padding:7px; border-radius:8px; border:1px solid var(--line); margin:4px 0; resize:vertical;"></textarea>' +
+                    '<select class="svc-scope-select" data-provider="' + p.providerId + '" style="width:100%; margin-bottom:4px;">' +
+                      '<option value="Puntual">Puntual / menor (ej. cambiar una pieza)</option>' +
+                      '<option value="Reparación media" selected>Reparación media</option>' +
+                      '<option value="Obra mayor">Obra mayor / renovación</option>' +
+                    '</select>' +
                     '<span class="svc-price-estimate" data-provider="' + p.providerId + '" style="display:block; font-size:.7rem; color:var(--ink-soft); margin:2px 0;"></span>' +
                     '<button type="button" class="job-action-btn svc-send-btn" data-provider="' + p.providerId + '">Enviar solicitud</button>') +
               '</div>'
@@ -4444,32 +4461,44 @@ function renderProviderDirectory(containerId, activeCats, context){
       renderProviderDirectory(containerId, cats, context);
     });
   });
+  function updateEstimate(providerId){
+    const priceSpan = container.querySelector('.svc-price-estimate[data-provider="' + providerId + '"]');
+    const select = container.querySelector('.svc-property-select[data-provider="' + providerId + '"]');
+    const scopeSel = container.querySelector('.svc-scope-select[data-provider="' + providerId + '"]');
+    if(!select.value){ priceSpan.textContent = ''; return; }
+    const property = inv[parseInt(select.value, 10)];
+    const provider = reg.find(p => p.providerId === providerId);
+    const categoria = (provider.categorias || [])[0] || 'Servicio general';
+    const est = estimateServicePrice(categoria, property.zona, null, scopeSel.value);
+    priceSpan.innerHTML = est.remote
+      ? '📍 Zona remota — sujeto a validación logística (no se confirma un costo automático)'
+      : 'Estimado según alcance: <b>' + money(est.price) + '</b> — el proveedor confirma el precio final en su cotización';
+  }
   container.querySelectorAll('.svc-property-select').forEach(sel => {
-    sel.addEventListener('change', () => {
-      const providerId = sel.dataset.provider;
-      const priceSpan = container.querySelector('.svc-price-estimate[data-provider="' + providerId + '"]');
-      if(!sel.value){ priceSpan.textContent = ''; return; }
-      const property = inv[parseInt(sel.value, 10)];
-      const provider = reg.find(p => p.providerId === providerId);
-      const categoria = (provider.categorias || [])[0] || 'Servicio general';
-      const est = estimateServicePrice(categoria, property.zona);
-      priceSpan.innerHTML = est.remote
-        ? '📍 Zona remota — sujeto a validación logística (no se confirma un costo automático)'
-        : 'Estimado: <b>' + money(est.price) + '</b>';
-    });
+    sel.addEventListener('change', () => updateEstimate(sel.dataset.provider));
+  });
+  container.querySelectorAll('.svc-scope-select').forEach(sel => {
+    sel.addEventListener('change', () => updateEstimate(sel.dataset.provider));
   });
   container.querySelectorAll('.svc-send-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const providerId = btn.dataset.provider;
       const select = container.querySelector('.svc-property-select[data-provider="' + providerId + '"]');
+      const descInput = container.querySelector('.svc-desc-input[data-provider="' + providerId + '"]');
+      const scopeSel = container.querySelector('.svc-scope-select[data-provider="' + providerId + '"]');
       if(!select.value){
         alert('Elige primero una propiedad.');
+        return;
+      }
+      if(!descInput.value.trim()){
+        alert('Describí qué necesitás — el proveedor no puede cotizar bien a ciegas.');
         return;
       }
       const property = getBancoInventory()[parseInt(select.value, 10)];
       const provider = getProvidersRegistry().find(p => p.providerId === providerId);
       const categoria = (provider.categorias || [])[0] || 'Servicio general';
-      const est = estimateServicePrice(categoria, property.zona);
+      const alcance = scopeSel.value;
+      const est = estimateServicePrice(categoria, property.zona, null, alcance);
       const jobs = getJobsRegistry();
       jobs.push({
         id: Date.now(),
@@ -4484,6 +4513,8 @@ function renderProviderDirectory(containerId, activeCats, context){
           precio: property.precio, fotos: property.fotos || []
         },
         categoria: categoria,
+        descripcion: descInput.value.trim(),
+        alcance: alcance,
         precioEstimado: est.remote ? null : est.price,
         logisticaPendiente: est.remote,
         estado: 'Esperando tu respuesta',
@@ -4493,6 +4524,7 @@ function renderProviderDirectory(containerId, activeCats, context){
       saveJobsRegistry(jobs);
       alert('Solicitud enviada a ' + (provider.negocio || provider.name) + '.');
       select.value = '';
+      descInput.value = '';
     });
   });
 }
@@ -4548,8 +4580,9 @@ function renderProveedorJobs(){
     '<div class="job-row" style="align-items:flex-start;">' +
       '<div>' +
         '<div class="job-row-title">' + j.categoria + ' — ' + prop.nombre + '</div>' +
-        '<div class="job-row-meta">🏦 ' + j.bancoNombre + '</div>' +
-        '<div class="job-row-meta">' + (j.logisticaPendiente ? '📍 Zona remota — sujeto a validación logística' : j.precioEstimado ? 'Estimado del sistema: ' + money(j.precioEstimado) : '') + '</div>' +
+        '<div class="job-row-meta">🏦 ' + j.bancoNombre + (j.alcance ? ' · ' + j.alcance : '') + '</div>' +
+        (j.descripcion ? '<div class="job-row-meta" style="margin-top:4px; font-style:italic;">"' + j.descripcion + '"</div>' : '') +
+        '<div class="job-row-meta">' + (j.logisticaPendiente ? '📍 Zona remota — sujeto a validación logística' : j.precioEstimado ? 'Estimado del sistema (no final): ' + money(j.precioEstimado) : '') + '</div>' +
         '<button type="button" class="job-view-prop-btn banco-item-service-btn" data-idx="' + j._idx + '" style="margin-top:6px;">Ver propiedad</button>' +
         (j.cotizacion ? '<div class="job-row-meta" style="margin-top:6px;">Tu cotización: <b>' + money(j.cotizacion.monto) + '</b> · plazo: ' + j.cotizacion.plazo + (j.cotizacion.nota ? ' — "' + j.cotizacion.nota + '"' : '') + '</div>' : '') +
         (j.evidencia ? '<div class="job-row-meta" style="margin-top:6px; font-style:italic;">Evidencia enviada: "' + j.evidencia.nota + '"' + (j.evidencia.foto ? ' 📷' : '') + '</div>' : '') +
