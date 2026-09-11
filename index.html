@@ -3893,7 +3893,7 @@ function renderBancoJobs(){
         '<div class="job-row-title">' + j.categoria + ' — ' + (prop.nombre || '') + '</div>' +
         '<div class="job-row-meta">🛠️ ' + (provider ? (provider.negocio || provider.name) : 'Proveedor') + '</div>' +
         (j.descripcion ? '<div class="job-row-meta" style="margin-top:4px; font-style:italic;">"' + j.descripcion + '"</div>' : '') +
-        (j.cotizacion ? '<div class="job-row-meta" style="margin-top:6px;">Cotización: <b>' + money(j.cotizacion.monto) + '</b> · plazo: ' + j.cotizacion.plazo + (j.cotizacion.nota ? ' — "' + j.cotizacion.nota + '"' : '') + '</div>' : '') +
+        (j.cotizacion ? '<div class="job-row-meta" style="margin-top:6px;">Cotización: <b>' + money(j.cotizacion.monto) + '</b> · duración: ' + j.cotizacion.plazo + (j.cotizacion.fecha ? ' · visita: ' + new Date(j.cotizacion.fecha + 'T00:00').toLocaleDateString('es-PA', {day:'numeric', month:'short'}) : '') + (j.cotizacion.nota ? ' — "' + j.cotizacion.nota + '"' : '') + '</div>' : '') +
         (j.evidencia ? '<div class="job-row-meta" style="margin-top:6px; font-style:italic;">Evidencia: "' + j.evidencia.nota + '"' + (j.evidencia.foto ? ' <a href="' + j.evidencia.foto + '" target="_blank">ver foto</a>' : '') + '</div>' : '') +
       '</div>' +
       '<div class="job-row-actions">' +
@@ -4568,7 +4568,7 @@ function renderProveedorJobs(){
         (j.descripcion ? '<div class="job-row-meta" style="margin-top:4px; font-style:italic;">"' + j.descripcion + '"</div>' : '') +
         (j.logisticaPendiente ? '<div class="job-row-meta">📍 Zona remota — sujeto a validación logística</div>' : '') +
         '<button type="button" class="job-view-prop-btn banco-item-service-btn" data-idx="' + j._idx + '" style="margin-top:6px;">Ver propiedad</button>' +
-        (j.cotizacion ? '<div class="job-row-meta" style="margin-top:6px;">Tu cotización: <b>' + money(j.cotizacion.monto) + '</b> · plazo: ' + j.cotizacion.plazo + (j.cotizacion.nota ? ' — "' + j.cotizacion.nota + '"' : '') + '</div>' : '') +
+        (j.cotizacion ? '<div class="job-row-meta" style="margin-top:6px;">Tu cotización: <b>' + money(j.cotizacion.monto) + '</b> · duración: ' + j.cotizacion.plazo + (j.cotizacion.fecha ? ' · visita: ' + new Date(j.cotizacion.fecha + 'T00:00').toLocaleDateString('es-PA', {day:'numeric', month:'short'}) : '') + (j.cotizacion.nota ? ' — "' + j.cotizacion.nota + '"' : '') + '</div>' : '') +
         (j.evidencia ? '<div class="job-row-meta" style="margin-top:6px; font-style:italic;">Evidencia enviada: "' + j.evidencia.nota + '"' + (j.evidencia.foto ? ' 📷' : '') + '</div>' : '') +
       '</div>' +
       '<div class="job-row-actions">' +
@@ -4579,7 +4579,8 @@ function renderProveedorJobs(){
       '</div>' +
       '<div class="banco-item-service-form job-quote-form" data-idx="' + j._idx + '" style="display:none; width:100%;">' +
         '<input type="number" class="job-quote-monto" placeholder="Monto ($)" min="0" style="width:110px; font-family:inherit; font-size:.8rem; padding:8px; border-radius:8px; border:1px solid var(--line);">' +
-        '<input type="text" class="job-quote-plazo" placeholder="Plazo, ej. 2 días" style="width:130px; font-family:inherit; font-size:.8rem; padding:8px; border-radius:8px; border:1px solid var(--line);">' +
+        '<input type="text" class="job-quote-plazo" placeholder="Duración, ej. 2 días" style="width:130px; font-family:inherit; font-size:.8rem; padding:8px; border-radius:8px; border:1px solid var(--line);">' +
+        '<input type="date" class="job-quote-fecha" title="Fecha en la que podés ir" style="font-family:inherit; font-size:.8rem; padding:8px; border-radius:8px; border:1px solid var(--line);">' +
         '<textarea class="job-quote-nota" rows="2" placeholder="Nota (opcional)" style="flex:1; min-width:160px; font-family:inherit; font-size:.8rem; padding:8px; border-radius:8px; border:1px solid var(--line);"></textarea>' +
         '<button type="button" class="job-action-btn job-quote-send" data-idx="' + j._idx + '">Enviar cotización</button>' +
       '</div>' +
@@ -4608,11 +4609,12 @@ function renderProveedorJobs(){
       const form = btn.closest('.job-quote-form');
       const monto = parseFloat(form.querySelector('.job-quote-monto').value);
       const plazo = form.querySelector('.job-quote-plazo').value.trim();
+      const fecha = form.querySelector('.job-quote-fecha').value;
       const nota = form.querySelector('.job-quote-nota').value.trim();
-      if(!monto || !plazo){ alert('Completá al menos el monto y el plazo.'); return; }
+      if(!monto || !plazo){ alert('Completá al menos el monto y la duración.'); return; }
       const jobs2 = getJobsRegistry();
       jobs2[parseInt(btn.dataset.idx, 10)].estado = 'Cotización enviada';
-      jobs2[parseInt(btn.dataset.idx, 10)].cotizacion = { monto: monto, plazo: plazo, nota: nota };
+      jobs2[parseInt(btn.dataset.idx, 10)].cotizacion = { monto: monto, plazo: plazo, fecha: fecha, nota: nota };
       saveJobsRegistry(jobs2);
       renderProveedorJobs();
     });
