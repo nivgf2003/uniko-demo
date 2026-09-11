@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Reposeídos de Playa — Panamá</title>
+<title>UniKo: Bienes Reposeídos en Panamá</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Rubik:wght@400;500;600;700;800&display=swap">
 <style>
   :root{
@@ -42,6 +42,18 @@
   }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;}
+  /* Feedback táctil global (Emil Kowalski: "buttons must feel responsive"). Cubre todos los
+     <button> del archivo de una sola vez en vez de repetir :active en cada clase — donde ya
+     existe un :active más específico (.btn, .market-btn), esa regla gana por especificidad. */
+  button{ transition:transform 140ms cubic-bezier(0.23,1,0.32,1); }
+  button:active{ transform:scale(.97); }
+  button:disabled{ cursor:default; }
+  /* Foco visible con el color de marca en vez del azul de fábrica del navegador — solo cuando
+     la navegación es por teclado (:focus-visible), no en cada click con mouse. */
+  a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible{
+    outline:2px solid var(--action);
+    outline-offset:2px;
+  }
   body{
     font-family:var(--font-sans);
     background:var(--sand);
@@ -198,7 +210,7 @@
     font-family:inherit;
     cursor:pointer;
     white-space:nowrap;
-    transition:background .2s ease;
+    transition:background .2s ease, transform 140ms cubic-bezier(0.23,1,0.32,1);
   }
   .hero-search button:hover{ background:var(--action-deep); }
   #heroMicBtn{
@@ -392,7 +404,7 @@
     border:none;
     cursor:pointer;
     margin-top:2px;
-    transition:filter .15s ease;
+    transition:filter .15s ease, transform 140ms cubic-bezier(0.23,1,0.32,1);
   }
   .sim-calc-btn:hover{ filter:brightness(1.12); }
   .sim-results{
@@ -786,7 +798,7 @@
     text-transform:uppercase;
     cursor:pointer;
     white-space:nowrap;
-    transition:background .2s ease, border-color .2s ease;
+    transition:background .2s ease, border-color .2s ease, transform 140ms cubic-bezier(0.23,1,0.32,1);
   }
   .auth-btn:hover{ background:var(--action-deep); border-color:var(--action-deep); }
   #resetDemoBtn{
@@ -1587,7 +1599,7 @@
     border:none;
     cursor:pointer;
     margin-top:2px;
-    transition:filter .15s ease;
+    transition:filter .15s ease, transform 140ms cubic-bezier(0.23,1,0.32,1);
   }
   .afford-calc-btn:hover{ filter:brightness(1.1); }
   .afford-result{
@@ -1853,7 +1865,11 @@
     background:var(--white);
     color:var(--ink-soft);
     cursor:pointer;
+    display:inline-flex;
+    align-items:center;
+    gap:5px;
   }
+  .map-layer-chip svg{ flex-shrink:0; }
   .map-layer-chip.active{
     background:var(--ocean-deep);
     border-color:var(--ocean-deep);
@@ -2031,7 +2047,7 @@
   <div class="hero-bg" id="heroBgB"></div>
   <div class="hero-inner">
     <h2 class="hero-title">Describí la propiedad que buscás, en tus palabras</h2>
-    <p class="hero-sub">Bienes reposeídos por bancos en Panamá. Escribí o hablá lo que te interesa — tipo, zona, vista, cuartos, piscina — o dibujá el área directamente en el mapa.</p>
+    <p class="hero-sub">Bienes reposeídos por bancos en Panamá. Escribí lo que buscás (tipo, zona, cuartos, piscina) o dibujá el área en el mapa.</p>
     <div class="hero-search">
       <input type="text" id="heroSearchInput" placeholder="Ej. Casa moderna con piscina y vista al mar, 3 habitaciones, cerca de Coronado...">
       <button type="button" id="heroMicBtn" title="Buscar por voz" aria-label="Buscar por voz">
@@ -2079,11 +2095,11 @@
     <button type="button" class="map-clear-btn" id="mapClearBtn" style="display:none;">✕ Borrar área</button>
   </div>
   <div class="map-layers" id="mapLayers">
-    <button type="button" class="map-layer-chip" data-poi="hospital">🏥 Hospital</button>
-    <button type="button" class="map-layer-chip" data-poi="pharmacy">💊 Farmacia</button>
-    <button type="button" class="map-layer-chip" data-poi="supermarket">🛒 Supermercado</button>
-    <button type="button" class="map-layer-chip" data-poi="school">🏫 Escuela</button>
-    <button type="button" class="map-layer-chip" data-poi="mall">🏬 Centro comercial</button>
+    <button type="button" class="map-layer-chip" data-poi="hospital"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg> Hospital</button>
+    <button type="button" class="map-layer-chip" data-poi="pharmacy"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="9" width="17" height="6" rx="3"/><line x1="12" y1="9" x2="12" y2="15"/></svg> Farmacia</button>
+    <button type="button" class="map-layer-chip" data-poi="supermarket"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9.5" cy="20" r="1.3"/><circle cx="17.5" cy="20" r="1.3"/><path d="M2.5 3h2l2.1 12.2a2 2 0 0 0 2 1.6h8.3a2 2 0 0 0 2-1.6L20.5 7H6.2"/></svg> Supermercado</button>
+    <button type="button" class="map-layer-chip" data-poi="school"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4 2.5 9l9.5 5 9.5-5L12 4z"/><path d="M6.5 11.3V16c0 1.4 2.5 2.7 5.5 2.7s5.5-1.3 5.5-2.7v-4.7"/></svg> Escuela</button>
+    <button type="button" class="map-layer-chip" data-poi="mall"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8h12l-1 12.5a1.5 1.5 0 0 1-1.5 1.5h-7a1.5 1.5 0 0 1-1.5-1.5L6 8z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg> Centro comercial</button>
   </div>
   <div class="map-section-sub" style="margin-top:6px; margin-bottom:0;">Datos reales de OpenStreetMap — puede tardar unos segundos, funciona mejor con el mapa acercado a la zona que te interesa.</div>
 </div>
@@ -2239,7 +2255,7 @@
 <select class="filter-select" id="toolbar"></select>
 
 <div class="dealbar">
-  <label style="margin-right:4px;">🔥 Descuento vs. mercado:</label>
+  <label style="margin-right:4px; display:inline-flex; align-items:center; gap:4px;"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2c1 3-3 4-3 8a3 3 0 0 0 6 0c1.5 1 2 2.8 2 4.5A5 5 0 0 1 7 14.5C7 9 12 7 12 2z"/></svg> Descuento vs. mercado:</label>
   <select id="dealSelect">
     <option value="0">Todos</option>
     <option value="10" selected>10%+ debajo</option>
@@ -2266,7 +2282,7 @@
   <div class="list-view-toggle" id="listViewToggle" style="display:none;">
     <button type="button" class="list-view-btn active" data-view="todos">Todas</button>
     <button type="button" class="list-view-btn" data-view="favoritos">❤ Favoritos</button>
-    <button type="button" class="list-view-btn" data-view="recientes">🕘 Recientes</button>
+    <button type="button" class="list-view-btn" data-view="recientes"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg> Recientes</button>
   </div>
   <select id="sortSelect">
     <option value="price-desc">Precio: mayor a menor</option>
@@ -3034,6 +3050,14 @@ const POI_ICON_SVGS = {
   school: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4 2.5 9l9.5 5 9.5-5L12 4z"/><path d="M6.5 11.3V16c0 1.4 2.5 2.7 5.5 2.7s5.5-1.3 5.5-2.7v-4.7"/></svg>',
   mall: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8h12l-1 12.5a1.5 1.5 0 0 1-1.5 1.5h-7a1.5 1.5 0 0 1-1.5-1.5L6 8z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg>',
 };
+// Mismas formas que POI_ICON_SVGS pero en currentColor (no white) — para usar sobre fondos
+// claros (chips de filtro), no solo sobre el pin coloreado del mapa. Reemplaza emoji a color
+// (choca con la paleta teal/coral) por trazo simple, como ya se hizo con cámara/pin/mail.
+const ICON_LOCK = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2"/><path d="M7.5 10.5V7a4.5 4.5 0 0 1 9 0v3.5"/></svg>';
+const ICON_USER = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.5"/><path d="M4.5 20c1.2-4 4.2-6 7.5-6s6.3 2 7.5 6"/></svg>';
+const ICON_CLOCK = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>';
+const ICON_CHECK = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5 9 17 20 6"/></svg>';
+const ICON_WARNING = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 22 20H2z"/><line x1="12" y1="9.5" x2="12" y2="14"/><circle cx="12" cy="16.8" r=".4" fill="currentColor" stroke="none"/></svg>';
 const POI_DEFS = {
   hospital:    { label: 'Hospital',         icon: POI_ICON_SVGS.hospital,     color: '#C1592F', tags: ['amenity=hospital'] },
   pharmacy:    { label: 'Farmacia',         icon: POI_ICON_SVGS.pharmacy,     color: '#3E7C59', tags: ['amenity=pharmacy'] },
@@ -3469,7 +3493,7 @@ function renderAuthBar(){
   if(currentUser){
     authBar.innerHTML =
       '<div class="auth-user">' +
-        '<span>👤 <span class="auth-user-name">' + currentUser.name + '</span><br>' +
+        '<span>' + ICON_USER + ' <span class="auth-user-name">' + currentUser.name + '</span><br>' +
         '<span class="auth-user-type">' + currentUser.tipo + '</span> · <button type="button" class="auth-logout-link" id="authLogoutBtn">Salir</button></span>' +
       '</div>';
     document.getElementById('authLogoutBtn').addEventListener('click', logoutUser);
@@ -3747,7 +3771,7 @@ function renderBancoDemanda(inv){
   html += '</div>';
 
   if(incompletas.length){
-    html += '<div class="analytics-market"><div class="analytics-market-title">⚠️ Fichas incompletas <span class="analytics-demo-tag-sm" style="background:var(--gold-soft); color:var(--green);">dato real</span></div>' +
+    html += '<div class="analytics-market"><div class="analytics-market-title">' + ICON_WARNING + ' Fichas incompletas <span class="analytics-demo-tag-sm" style="background:var(--gold-soft); color:var(--green);">dato real</span></div>' +
       '<div class="analytics-market-detail">' + incompletas.length + ' propiedad' + (incompletas.length===1?'':'es') + ' con menos del 60% de la ficha completa — esto reduce su probabilidad real de conversión, no es un estimado. Completá precio, área, habitaciones/baños y al menos 3 fotos.</div></div>';
   }
 
@@ -4824,13 +4848,13 @@ function renderList(){
         card.innerHTML = basicHtml +
           '<div class="locked-wrap">' +
             '<div class="locked-blur">' + detailHtml + '</div>' +
-            '<div class="locked-overlay"><button type="button" class="locked-badge locked-badge-btn login-gate-btn">🔒 Inicia sesión para ver todo el detalle</button></div>' +
+            '<div class="locked-overlay"><button type="button" class="locked-badge locked-badge-btn login-gate-btn">' + ICON_LOCK + ' Inicia sesión para ver todo el detalle</button></div>' +
           '</div>';
         card.querySelector('.login-gate-btn').addEventListener('click', () => openAuthModal('comprador'));
       } else if(p._locked){
         card.classList.add('locked-wrap');
         card.innerHTML = '<div class="locked-blur">' + basicHtml + detailHtml + '</div>' +
-          '<div class="locked-overlay"><span class="locked-badge">🔒 Fuera de tu presupuesto actual</span></div>';
+          '<div class="locked-overlay"><span class="locked-badge">' + ICON_LOCK + ' Fuera de tu presupuesto actual</span></div>';
       } else {
         card.innerHTML = basicHtml + detailHtml;
       }
@@ -4845,7 +4869,7 @@ function renderList(){
       const verificaSelect = cCard.querySelector('.verifica-product-select');
       function refreshVerificaOption(){
         const opt = verificaOptions[parseInt(verificaSelect.value, 10)];
-        cCard.querySelector('.verifica-includes').innerHTML = opt.incluye.map(t => '<li>✅ ' + t + '</li>').join('');
+        cCard.querySelector('.verifica-includes').innerHTML = opt.incluye.map(t => '<li>' + ICON_CHECK + ' ' + t + '</li>').join('');
         cCard.querySelector('.verifica-price').textContent = opt.remote
           ? '📍 Zona remota — sujeto a validación logística, te confirmamos el costo antes de cobrar.'
           : 'Estimado del sistema: ' + money(opt.price) + '. El pago se coordina directamente hasta que exista pasarela integrada.';
